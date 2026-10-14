@@ -51,6 +51,21 @@
       "purpose": "A data scene evaluates the spec language and follows its parameters."
     },
     {
+      "name": "etaf-screensaver-tests-unicode-scene-publishes-text",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Mixed ASCII, CJK, block symbols and supplementary Unicode text retain their characters and color across frame publications."
+    },
+    {
+      "name": "etaf-screensaver-tests-random-particles-follow-seed",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Random particle initialization and updates replay the same visible frame after resetting the session seed."
+    },
+    {
+      "name": "etaf-screensaver-tests-bundled-scenes-publish-frames",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "All nine bundled scenes open and publish stepped frames without canvas errors."
+    },
+    {
       "name": "etaf-screensaver-tests-reload-rebuilds-the-mounted-scene",
       "file": "tests/etaf-screensaver-tests.el",
       "purpose": "Reloading the scene files refreshes the mounted scene in place."

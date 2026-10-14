@@ -66,11 +66,10 @@ functions are callable; an unknown function, variable or form signals
                  (setq result (etaf-screensaver--expr-eval (pop rest) environment)))
                result))
         ('not (not (etaf-screensaver--expr-eval (nth 1 expression) environment)))
-        (_ (etaf-screensaver--expr-call
-            operator
-            (mapcar (lambda (argument)
-                      (etaf-screensaver--expr-eval argument environment))
-                    (cdr expression)))))))
+        (_ (let (arguments)
+             (dolist (argument (cdr expression))
+               (push (etaf-screensaver--expr-eval argument environment) arguments))
+             (etaf-screensaver--expr-call operator (nreverse arguments)))))))
    (t (etaf-screensaver--fail "Invalid scene expression: %S" expression))))
 
 (defun etaf-screensaver--expr-call (function arguments)
@@ -157,7 +156,7 @@ raw by their layer kind and never go through this function."
 (cl-defstruct (etaf-screensaver--canvas (:constructor etaf-screensaver--canvas-new))
   "One frame under composition: characters with per-cell colors.
 WIDTH and HEIGHT are the canvas size in cells, CHARS a WIDTH times HEIGHT
-string, FACES a vector of color strings or nil per cell and COLORED non-nil
+character vector, FACES a vector of color strings or nil per cell and COLORED non-nil
 once any cell carries a color.  A wide character owns the cell after it,
 which holds `etaf-screensaver--canvas-continuation' and never renders."
   width height chars faces colored)
@@ -168,7 +167,7 @@ which holds `etaf-screensaver--canvas-continuation' and never renders."
 (defun etaf-screensaver--canvas-create (width height)
   "Return a blank WIDTH by HEIGHT canvas."
   (etaf-screensaver--canvas-new :width width :height height
-                                :chars (make-string (* width height) ?\s)
+                                :chars (make-vector (* width height) ?\s)
                                 :faces (make-vector (* width height) nil)))
 
 (defun etaf-screensaver--canvas-draw (canvas row column character &optional color)
@@ -218,7 +217,7 @@ display column."
     (if (not (cl-position etaf-screensaver--canvas-continuation chars
                           :start start :end end))
         (if (not (etaf-screensaver--canvas-colored canvas))
-            (substring chars start end)
+            (concat (substring chars start end))
           (let ((column 0)
                 (parts nil))
             (while (< column width)
@@ -227,7 +226,7 @@ display column."
                 (while (and (< column width)
                             (equal face (aref faces (+ start column))))
                   (cl-incf column))
-                (let ((text (substring chars (+ start run-start) (+ start column))))
+                (let ((text (concat (substring chars (+ start run-start) (+ start column)))))
                   (push (if face
                             (propertize text 'face (list :foreground face))
                           text)
@@ -377,22 +376,25 @@ be interpreted."
           :params (plist-get spec :params)
           :create
           (lambda (context)
-            (list :layers
-                  (mapcar (lambda (layer)
-                            (cons layer
-                                  (when-let* ((create (etaf-screensaver--layer-function
-                                                       (plist-get layer :kind) :create)))
-                                    (funcall create layer context))))
-                          layers)))
+            (let ((etaf-screensaver--dsl-random (plist-get context :random)))
+              (list :layers
+                    (mapcar (lambda (layer)
+                              (cons layer
+                                    (when-let* ((create (etaf-screensaver--layer-function
+                                                         (plist-get layer :kind) :create)))
+                                      (funcall create layer context))))
+                            layers))))
           :step
           (lambda (state context)
-            (dolist (entry (plist-get state :layers))
-              (when-let* ((step (etaf-screensaver--layer-function
-                                 (plist-get (car entry) :kind) :step)))
-                (funcall step (car entry) (cdr entry) context))))
+            (let ((etaf-screensaver--dsl-random (plist-get context :random)))
+              (dolist (entry (plist-get state :layers))
+                (when-let* ((step (etaf-screensaver--layer-function
+                                   (plist-get (car entry) :kind) :step)))
+                  (funcall step (car entry) (cdr entry) context)))))
           :render
           (lambda (state context)
-            (let ((canvas (etaf-screensaver--canvas-create
+            (let ((etaf-screensaver--dsl-random (plist-get context :random))
+                  (canvas (etaf-screensaver--canvas-create
                            (plist-get context :columns)
                            (plist-get context :rows))))
               (dolist (entry (plist-get state :layers))
@@ -402,22 +404,24 @@ be interpreted."
               (etaf-screensaver--canvas-compose canvas)))
           :resize
           (lambda (state context)
-            (dolist (entry (plist-get state :layers))
-              (let* ((kind (plist-get (car entry) :kind))
-                     (resize (etaf-screensaver--layer-function kind :resize))
-                     (create (etaf-screensaver--layer-function kind :create)))
-                (setcdr entry (if resize
-                                  (funcall resize (car entry) (cdr entry) context)
-                                (when create (funcall create (car entry) context))))))
+            (let ((etaf-screensaver--dsl-random (plist-get context :random)))
+              (dolist (entry (plist-get state :layers))
+                (let* ((kind (plist-get (car entry) :kind))
+                       (resize (etaf-screensaver--layer-function kind :resize))
+                       (create (etaf-screensaver--layer-function kind :create)))
+                  (setcdr entry (if resize
+                                    (funcall resize (car entry) (cdr entry) context)
+                                  (when create (funcall create (car entry) context)))))))
             state)
           :pointer
           (lambda (state context event)
-            (cl-loop for entry in (plist-get state :layers)
-                     for pointer = (etaf-screensaver--layer-function
-                                    (plist-get (car entry) :kind) :pointer)
-                     when (and pointer (funcall pointer (car entry) (cdr entry)
-                                                context event))
-                     return t)))))
+            (let ((etaf-screensaver--dsl-random (plist-get context :random)))
+              (cl-loop for entry in (plist-get state :layers)
+                       for pointer = (etaf-screensaver--layer-function
+                                      (plist-get (car entry) :kind) :pointer)
+                       when (and pointer (funcall pointer (car entry) (cdr entry)
+                                                  context event))
+                       return t))))))
 
 (defun etaf-screensaver-register-scene (spec)
   "Register the scene described by SPEC and return the scene.

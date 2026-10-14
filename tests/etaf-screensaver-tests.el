@@ -193,6 +193,74 @@
       (when (buffer-live-p buffer)
         (etaf-screensaver-close "*test-etaf-screensaver-spec*")))))
 
+(ert-deftest etaf-screensaver-tests-unicode-scene-publishes-text ()
+  "ASCII, wide text and Unicode symbols survive canvas composition."
+  (let ((name "*test-etaf-screensaver-unicode*")
+        (content "A 中 B ▓ ○ 🚀 Z"))
+    (etaf-screensaver-register-scene
+     `(:id test-unicode :title "Unicode"
+       :layers ((:kind text :lines ,content :align left :scroll nil
+                 :color "#66CCAA"))))
+    (unwind-protect
+        (let ((buffer (etaf-screensaver-open 'test-unicode name)))
+          (etaf-screensaver-pause name)
+          (dotimes (_ 3)
+            (etaf-screensaver-step name)
+            (let* ((text (etaf-screensaver-tests--text buffer))
+                   (position (string-match (regexp-quote content) text))
+                   (status (etaf-screensaver-status name)))
+              (should position)
+              (should-not (plist-get status :notice))
+              (with-current-buffer buffer
+                (let ((face (get-text-property (+ (point-min) position) 'face)))
+                  (should (cl-some (lambda (spec)
+                                     (and (listp spec)
+                                          (equal (plist-get spec :foreground) "#66CCAA")))
+                                   face)))))))
+      (when (get-buffer name) (etaf-screensaver-close name)))))
+
+(ert-deftest etaf-screensaver-tests-random-particles-follow-seed ()
+  "Particle creation and updates use the reproducible session generator."
+  (let ((name "*test-etaf-screensaver-random*"))
+    (etaf-screensaver-register-scene
+     '(:id test-random :title "Random particles"
+       :layers ((:kind particles :count 12
+                 :init ((x (rndi w)) (y (rndi h)))
+                 :update ((x (rndi w)) (y (rndi h)))
+                 :draw (:char "*")))))
+    (unwind-protect
+        (let ((buffer (etaf-screensaver-open 'test-random name)))
+          (etaf-screensaver-pause name)
+          (etaf-screensaver-set-seed 4242 name)
+          (etaf-screensaver-step name)
+          (let ((first (etaf-screensaver-tests--text buffer)))
+            (etaf-screensaver-reset name)
+            (etaf-screensaver-step name)
+            (let ((replayed (etaf-screensaver-tests--text buffer))
+                  (status (etaf-screensaver-status name)))
+              (should (equal first replayed))
+              (should-not (plist-get status :notice))
+              (should (string-match-p "\\*" first)))))
+      (when (get-buffer name) (etaf-screensaver-close name)))))
+
+(ert-deftest etaf-screensaver-tests-bundled-scenes-publish-frames ()
+  "Every bundled scene opens and advances without a canvas error."
+  (dolist (scene '(banner donut falling-sand life matrix plasma quotes snow starfield))
+    (ert-info ((format "Scene: %s" scene))
+      (let ((name "*test-etaf-screensaver-bundled*"))
+        (unwind-protect
+            (let ((buffer (etaf-screensaver-open scene name)))
+              (etaf-screensaver-pause name)
+              (etaf-screensaver-set-seed 4242 name)
+              (dotimes (_ 3) (etaf-screensaver-step name))
+              (let ((status (etaf-screensaver-status name))
+                    (text (etaf-screensaver-tests--text buffer)))
+                (should (eq (plist-get status :scene) scene))
+                (should (= (plist-get status :ticks) 3))
+                (should-not (plist-get status :notice))
+                (should (string-match-p "已暂停" text))))
+          (when (get-buffer name) (etaf-screensaver-close name)))))))
+
 (ert-deftest etaf-screensaver-tests-reload-rebuilds-the-mounted-scene ()
   "Reloading the scene files refreshes the mounted scene in place."
   (let ((buffer (etaf-screensaver-open 'plasma "*test-etaf-screensaver-reload*")))

@@ -87,7 +87,6 @@ headless and can still be stepped.  Return the session."
                     :canvas-id (etaf-screensaver--next-canvas-id)
                     :hud-ref (make-symbol "etaf-screensaver-hud")
                     :hud-id (etaf-screensaver--next-hud-id)
-                    :random-state (cl-make-random-state seed)
                     :revision (etaf-ref 0 :name 'etaf-screensaver-revision)
                     :cinema (etaf-ref nil :name 'etaf-screensaver-cinema)
                     :params-open (etaf-ref nil :name 'etaf-screensaver-params-open)
@@ -229,14 +228,16 @@ next frame retries it."
 
 (defun etaf-screensaver--session-recreate (session)
   "Recreate SESSION's scene state and render the first frame."
-  (setf (etaf-screensaver--session-state session)
-        (funcall (etaf-screensaver--scene-create (etaf-screensaver--session-scene session))
-                 (etaf-screensaver--session-context session))
+  (setf (etaf-screensaver--session-random-state session)
+        (cl-make-random-state (etaf-screensaver--session-seed session))
         (etaf-screensaver--session-ticks session) 0
         (etaf-screensaver--session-elapsed session) 0.0
         (etaf-screensaver--session-dt session) 0.0
         (etaf-screensaver--session-scene-elapsed session) 0.0
-        (etaf-screensaver--session-published-frame session) nil)
+        (etaf-screensaver--session-published-frame session) nil
+        (etaf-screensaver--session-state session)
+        (funcall (etaf-screensaver--scene-create (etaf-screensaver--session-scene session))
+                 (etaf-screensaver--session-context session)))
   (etaf-screensaver--session-render session))
 
 (defun etaf-screensaver--session-advance (session &optional dt)
@@ -294,8 +295,7 @@ DT is the seconds elapsed since the previous step, zero for a single step."
 
 (defun etaf-screensaver--session-set-seed (session seed)
   "Set SESSION's seed to SEED, restart its random state and reset."
-  (setf (etaf-screensaver--session-seed session) seed
-        (etaf-screensaver--session-random-state session) (cl-make-random-state seed))
+  (setf (etaf-screensaver--session-seed session) seed)
   (etaf-screensaver--session-reset session))
 
 (defun etaf-screensaver--session-set-frame-rate (session frame-rate)

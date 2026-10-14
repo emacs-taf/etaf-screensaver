@@ -106,6 +106,9 @@ a global.
 | random | `(rnd)` in [0,1), `(rnd LIMIT)` in [0,LIMIT), `(rndi LIMIT)` integer |
 
 Comparisons are variadic: `(< a b c)` is true when the sequence increases.
+Random expressions use the session's seeded generator during creation, steps,
+rendering, resize and pointer handling. Resetting the seed replays the same
+sequence when the viewport, parameters and subsequent actions are unchanged.
 
 ## Layers
 

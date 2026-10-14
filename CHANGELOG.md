@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Scenes can draw Unicode symbols and mixed-width text on Emacs 31, including
+  Matrix, Life and Chinese quotes, without failing to write a canvas cell.
+- Random expressions use the session seed throughout the scene lifecycle,
+  allowing Snow and Starfield to initialize and reset reproducibly.
+
 ## 0.1.0
 
 Initial release.

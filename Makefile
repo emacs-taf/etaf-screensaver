@@ -16,13 +16,14 @@ LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/e
 
 SOURCES = $(wildcard lisp/*.el) etaf-screensaver.el
 SOURCES += scripts/etaf-screensaver-gui-scenarios.el
+SOURCES += $(wildcard benchmarks/*.el)
 
 .PHONY: all compile load test check structure-check setup-hooks acceptance api-check gui clean
 
 all: check
 
 compile:
-	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc
+	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc benchmarks/*.elc
 	$(EMACS) -Q --batch $(LOAD_PATH) \
 		--eval '(setq load-prefer-newer t byte-compile-error-on-warn t)' \
 		--eval '(require (quote cl-lib))' \
@@ -55,4 +56,4 @@ gui:
 	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (add-to-list (quote load-path) "$(CURDIR)/scripts") (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run) directory) directory))'
 
 clean:
-	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc
+	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc benchmarks/*.elc

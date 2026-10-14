@@ -97,6 +97,19 @@ make compile   # byte-compilation with warnings as errors
 make clean
 ```
 
+Frame-publication workloads are registered in `benchmarks/performance-scenarios.el`.
+From the enclosing `emacs-taf` workspace, run:
+
+```sh
+python3 scripts/performance.py run --mode batch \
+  --scenario-file etaf-apps/etaf-screensaver/benchmarks/performance-scenarios.el \
+  --load-path etaf-apps/etaf-screensaver --scenario 'etaf-screensaver.frame.*'
+```
+
+These workloads step seeded, paused scenes; they measure computation and
+publication rather than timer cadence. See the workspace performance manual
+for baseline comparison and GUI measurement.
+
 The GUI workflow (`make gui`) runs the maintained scenario in a graphical
 Emacs server and leaves screenshots in a fresh evidence directory. On Windows,
 set `PYTHONUTF8=1` if you invoke the Python policy tools directly; the
