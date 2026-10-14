@@ -109,7 +109,12 @@ headless and can still be stepped.  Return the session."
           :dt (etaf-screensaver--session-dt session)
           :params (mapcar #'car (etaf-screensaver--session-params session))
           :param (lambda (key) (etaf-screensaver--session-param session key))
-          :random (lambda (limit) (cl-random limit random-state)))))
+          ;; RANDOM mirrors the spec language's `rnd': no argument returns a
+          ;; float in [0, 1), a positive LIMIT an integer below it.
+          :random (lambda (&optional limit)
+                    (if limit
+                        (cl-random limit random-state)
+                      (/ (float (cl-random 1000000 random-state)) 1000000.0))))))
 
 (defun etaf-screensaver--param-key (key)
   "Return KEY as the plain symbol a parameter descriptor uses.
@@ -193,18 +198,23 @@ rows and short rows are padded and extra rows are dropped."
             (if notice (format " · %s" notice) ""))))
 
 (defun etaf-screensaver--session-publish (session)
-  "Publish SESSION's changed canvas and HUD content to its Runtime."
+  "Publish SESSION's changed canvas and HUD content to its Runtime.
+A host that is not committed yet (the first publication can land during the
+mount transaction) is skipped without marking its content published, so the
+next frame retries it."
   (let ((runtime (etaf-screensaver--session-runtime session)))
     (when (and runtime (etaf-runtime-mounted-p runtime))
       (let ((updates nil)
-            (hud (etaf-screensaver--session-hud-text session)))
-        (unless (equal (etaf-screensaver--session-frame session)
-                       (etaf-screensaver--session-published-frame session))
-          (push (cons (etaf-screensaver--session-canvas-ref session)
-                      (etaf-screensaver--session-frame session))
-                updates))
-        (unless (equal hud (etaf-screensaver--session-published-hud session))
-          (push (cons (etaf-screensaver--session-hud-ref session) hud) updates))
+            (hud (etaf-screensaver--session-hud-text session))
+            (canvas-ref (etaf-screensaver--session-canvas-ref session))
+            (hud-ref (etaf-screensaver--session-hud-ref session)))
+        (when (and (etaf-host-ref-bounds runtime canvas-ref)
+                   (not (equal (etaf-screensaver--session-frame session)
+                               (etaf-screensaver--session-published-frame session))))
+          (push (cons canvas-ref (etaf-screensaver--session-frame session)) updates))
+        (when (and (etaf-host-ref-bounds runtime hud-ref)
+                   (not (equal hud (etaf-screensaver--session-published-hud session))))
+          (push (cons hud-ref hud) updates))
         (when updates
           (condition-case problem
               (progn

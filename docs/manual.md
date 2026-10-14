@@ -70,7 +70,7 @@ Every callback receives a plist:
 | `:dt` | seconds since the previous step (0 for a single step) |
 | `:params` | list of parameter keys |
 | `:param` | key to value function |
-| `:random` | function of a positive limit returning an integer below it |
+| `:random` | no argument returns a float in [0,1); a positive limit returns an integer below it |
 
 ## Expression language
 
