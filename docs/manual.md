@@ -345,6 +345,12 @@ count and license. Playback follows the recording's own per-frame timing and
 centers its fixed canvas, cropping both edges in a smaller window. A scene
 duration longer than the recording loops it.
 
+Many recorded effects are entrance animations: the text resolves and the
+frames then hold. Choose a recording that keeps changing — the bundled
+`tte-beams`, `tte-synthgrid` and `tte-thunderstorm` all do — or shorten its
+item duration so the still hold does not dominate. Importing validates format
+and safety; it does not judge whether the animation stays in motion.
+
 Terminal Text Effects (TTE) recordings (`*.tterec`) are supported out of the
 box. Record one with the tool, then import it:
 
