@@ -1,0 +1,29 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Falling sand: three materials with declarative movement, plus mouse
+;; painting through the brush parameters and a passive sand rain.
+
+(etaf-scene
+ :id falling-sand
+ :title "落沙"
+ :summary "落沙玩具：鼠标拖拽画沙子、水和墙，无人看时自己下沙。"
+ :tags (physics interactive)
+ :frame-rate 20
+ :background "#05070B"
+ :params ((:key brush :label "画笔" :type choice
+           :options ((sand . "沙") (water . "水") (wall . "墙") (erase . "擦除"))
+           :default sand)
+          (:key size :label "笔刷大小" :type number
+           :min 1 :max 9 :step 2 :default 3)
+          (:key rain :label "自动下沙" :type toggle :default t))
+ :layers ((:kind sand
+           :materials ((:key sand :char "#" :color "#D9C08A"
+                        :moves (down down-left down-right))
+                       (:key water :char "~" :color "#5AA9FF"
+                        :moves (down down-left down-right left right)
+                        :flows-through (sand))
+                       (:key wall :char "█" :color "#8B98A9"
+                        :moves ()))
+           :rain (if rain 3 0)
+           :brush brush
+           :brush-size size)))

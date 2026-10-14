@@ -1,0 +1,21 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Omarchy-style terminal text effects: one ASCII banner, a random effect at a
+;; time, looping forever.  The effect list comes from the banner layer kind.
+
+(etaf-scene
+ :id banner
+ :title "字效标语"
+ :summary "ASCII 大字加随机终端字效循环，参考 Omarchy 屏保的 ttfx 效果。"
+ :tags (text effect)
+ :frame-rate 24
+ :background "#000000"
+ :params ((:key effect-time :label "单效应时长" :type number
+           :min 1 :max 8 :step 1 :default 3)
+          (:key hold :label "停留秒数" :type number
+           :min 0 :max 3 :step 1 :default 1))
+ :layers ((:kind banner
+           :art "##### #####  ###  #####\n#       #   #   # #    \n####    #   ##### #### \n#       #   #   # #    \n#####   #   #   # #    "
+           :effect-time effect-time
+           :hold hold
+           :colors ("#E8ECF1" "#9FC7FF" "#7DFFA3" "#FBBF24" "#FF7AB6"))))

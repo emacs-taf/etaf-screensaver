@@ -1,0 +1,31 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Starfield: fixed offsets in a shrinking z; nearer stars are brighter and
+;; larger.  A recycled star respawns at maximum depth.
+
+(etaf-scene
+ :id starfield
+ :title "星空"
+ :summary "星点扑面而来：z 越小越亮，出屏后回到最远处。"
+ :tags (space particles)
+ :frame-rate 30
+ :background "#02030A"
+ :params ((:key speed :label "飞行速度" :type number
+           :min 1 :max 30 :step 1 :default 10)
+          (:key count :label "星数" :type number
+           :min 20 :max 400 :step 20 :default 160))
+ :layers ((:kind particles
+           :count count
+           :init ((x (- (* (rnd) w) cx))
+                  (y (- (* (rnd) h) cy))
+                  (z (+ 0.15 (* (rnd) 0.85))))
+           :update ((z (- z (* dt speed 0.12))))
+           :recycle (:when (< z 0.08)
+                     :fields ((x (- (* (rnd) w) cx))
+                              (y (- (* (rnd) h) cy))
+                              (z 1.0)))
+           :draw ((:x (+ cx (/ x z)))
+                  (:y (+ cy (/ y z)))
+                  (:char (if (> z 0.65) "*" (if (> z 0.35) "+" ".")))
+                  (:color (if (> z 0.65) "#FFFFFF"
+                            (if (> z 0.35) "#9FC7FF" "#3E5B8A")))))))

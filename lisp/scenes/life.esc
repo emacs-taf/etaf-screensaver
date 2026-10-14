@@ -1,0 +1,21 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Conway's Game of Life: a neighborhood automaton with an automatic reseed
+;; whenever the population dies out.
+
+(etaf-scene
+ :id life
+ :title "生命游戏"
+ :summary "康威生命游戏：随机开局，种群死绝后自动重新播种。"
+ :tags (cellular monochrome)
+ :frame-rate 8
+ :background "#05070B"
+ :params ((:key density :label "初始密度" :type number
+           :min 5 :max 60 :step 5 :default 25)
+          (:key wrap :label "环绕边界" :type toggle :default t))
+ :layers ((:kind life
+           :char "█"
+           :color "#7DFFA3"
+           :density (/ density 100.0)
+           :wrap wrap
+           :rule (:birth (3) :survive (2 3)))))

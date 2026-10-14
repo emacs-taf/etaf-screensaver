@@ -1,0 +1,30 @@
+;;; -*- mode: emacs-lisp; lexical-binding: t; -*-
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;; Quotes: a centered block scrolling slowly upwards.  Empty strings keep
+;; the paragraph gaps.
+
+(etaf-scene
+ :id quotes
+ :title "枕边话"
+ :summary "缓慢上滚的句子，整屏居中，时间也跟着慢下来。"
+ :tags (text)
+ :frame-rate 12
+ :background "#07070B"
+ :params ((:key speed :label "滚动速度" :type number
+           :min 1 :max 8 :step 1 :default 2))
+ :layers ((:kind text
+           :align center
+           :color "#E8DFC8"
+           :speed (/ speed 2.0)
+           :lines ("生活不是等待风暴过去，"
+                   "而是学会在雨中翩翩起舞。"
+                   ""
+                   "所有你乐于挥霍的时间，"
+                   "都不算浪费。"
+                   ""
+                   "慢慢来，"
+                   "比较快。"
+                   ""
+                   "山不拒细土，方能成其高；"
+                   "海不择细流，方能就其深。"
+                   ""))))

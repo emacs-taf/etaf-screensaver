@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "load_path": [
+    ".",
+    "lisp",
+    "tests",
+    "../etaf",
+    "../etaf-ui",
+    "../ebox",
+    "../ecss",
+    "../../etaf",
+    "../../etaf-ui",
+    "../../ebox",
+    "../../ecss"
+  ],
+  "support": [],
+  "cases": [
+    {
+      "name": "etaf-screensaver-tests-open-mounts-and-close-releases",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Opening mounts a live runtime with a rendered frame and closing kills its buffer."
+    },
+    {
+      "name": "etaf-screensaver-tests-scenes-register-and-describe",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "The catalog lists the bundled code and data scenes and describes each by id or title."
+    },
+    {
+      "name": "etaf-screensaver-tests-step-advances-one-frame",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Stepping pauses the workspace and advances exactly one visible frame."
+    },
+    {
+      "name": "etaf-screensaver-tests-controls-publish-status",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Pause, resume, reset, seed and frame rate each publish their documented status."
+    },
+    {
+      "name": "etaf-screensaver-tests-params-drive-the-scene",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Setting a scene parameter changes what the next frame renders."
+    },
+    {
+      "name": "etaf-screensaver-tests-select-scene-switches-and-validates",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Switching scenes updates the workspace and unknown scene names are rejected."
+    },
+    {
+      "name": "etaf-screensaver-tests-spec-scene-renders-and-takes-params",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "A data scene evaluates the spec language and follows its parameters."
+    },
+    {
+      "name": "etaf-screensaver-tests-reload-rebuilds-the-mounted-scene",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Reloading the scene files refreshes the mounted scene in place."
+    },
+    {
+      "name": "etaf-screensaver-tests-loader-reads-and-overrides-files",
+      "file": "tests/etaf-screensaver-tests.el",
+      "purpose": "Scene files load, replace by id and skip broken files without stopping the load."
+    }
+  ]
+}
