@@ -17,7 +17,8 @@
   :group 'multimedia)
 
 (defcustom etaf-screensaver-program
-  '(:order shuffle :scenes (banner donut falling-sand life matrix plasma quotes snow starfield))
+  '(:order shuffle :scenes (banner donut falling-sand life matrix plasma quotes snow starfield
+                                   tte-beams tte-synthgrid tte-thunderstorm))
   "Playback program, repeated until input dismisses the screensaver.
 A symbol names a scene.  A scene plist holds :scene and optional :duration,
 :frame-rate and :params (an alist).  A group holds :order (sequential,

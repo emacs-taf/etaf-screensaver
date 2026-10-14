@@ -4,31 +4,37 @@
 
 ;;; Commentary:
 ;;
-;; Scenes are data files.  Every *.esc file in
+;; Scenes and reels are data files.  Every *.esc file in
 ;; `etaf-screensaver-scene-directories' is read as one `(etaf-scene ...)'
-;; form and registered by the DSL, so adding a screensaver means dropping a
-;; file in a directory, never adding Lisp.  Bundled scenes ship under
-;; lisp/scenes; the user directory overrides a bundled scene with the same
-;; id.  Loading is tolerant: a broken file reports and the rest load.
+;; form and registered by the DSL, and every *.esr file as one
+;; `(etaf-reel ...)' form registered through its recording provider, so
+;; adding a screensaver means dropping a file in a directory, never adding
+;; Lisp.  Bundled scenes ship under lisp/scenes; the user directory overrides
+;; a bundled scene with the same id.  Loading is tolerant: a broken file
+;; reports and the rest load.
 
 ;;; Code:
 
 (require 'cl-lib)
 (require 'etaf-screensaver-model)
 (require 'etaf-screensaver-dsl)
+(require 'etaf-screensaver-reel)
 
-(defun etaf-screensaver--bundled-scene-directory ()
-  "Return the directory of the scene specs shipped with this package."
+(defun etaf-screensaver--bundled-scene-directories ()
+  "Return the bundled reel and scene spec directories, in order."
   (when-let* ((library (locate-library "etaf-screensaver-loader")))
-    (expand-file-name "scenes" (file-name-directory library))))
+    (let ((directory (file-name-directory library)))
+      (list (expand-file-name "reels" directory)
+            (expand-file-name "scenes" directory)))))
 
 (defcustom etaf-screensaver-scene-directories
-  (delq nil (list (etaf-screensaver--bundled-scene-directory)
-                  (locate-user-emacs-file "etaf-screensaver/scenes")))
-  "Directories scanned for scene spec files, in order.
-Every *.esc file holds one `(etaf-scene ...)' form.  A later directory
-replaces a scene whose :id already exists, so the user directory overrides a
-bundled scene of the same id."
+  (append (etaf-screensaver--bundled-scene-directories)
+          (list (locate-user-emacs-file "etaf-screensaver/scenes")))
+  "Directories scanned for scene and reel spec files, in order.
+Every *.esc file holds one `(etaf-scene ...)' form and every *.esr file one
+`(etaf-reel ...)' form.  A later directory replaces a scene whose :id
+already exists, so the user directory overrides a bundled scene of the same
+id.  Bundled reels reference recorded animations shipped with the package."
   :type '(repeat directory)
   :group 'etaf-screensaver)
 
@@ -49,7 +55,7 @@ bundled scene of the same id."
       form)))
 
 (defun etaf-screensaver-load-scenes (&optional directories)
-  "Load every scene spec file in DIRECTORIES and return how many loaded.
+  "Load every scene and reel spec file in DIRECTORIES and return how many loaded.
 DIRECTORIES defaults to `etaf-screensaver-scene-directories'.  Files load in
 name order per directory and later directories replace earlier scenes whose
 :id matches, so a user scene can override a bundled one.  A file that fails
@@ -59,11 +65,16 @@ to read or validate reports and is skipped; the other files still load."
         (count 0))
     (dolist (directory directories)
       (when (and directory (file-directory-p directory))
-        (dolist (file (directory-files directory t "\\`[^.#].*\\.esc\\'"))
+        (dolist (file (directory-files directory t "\\`[^.#].*\\.\\(?:esc\\|esr\\)\\'"))
           (condition-case problem
               (progn
-                (etaf-screensaver-register-scene
-                 (etaf-screensaver--read-scene-file file))
+                (if (equal (file-name-extension file) "esr")
+                    (let ((etaf-screensaver--reel-directory
+                           (file-name-directory file)))
+                      (etaf-screensaver-register-reel
+                       (etaf-screensaver--read-scene-file file)))
+                  (etaf-screensaver-register-scene
+                   (etaf-screensaver--read-scene-file file)))
                 (cl-incf count))
             (error
              (message "etaf-screensaver: skipping %s: %s"

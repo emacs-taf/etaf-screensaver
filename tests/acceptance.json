@@ -14,6 +14,12 @@
     {"name": "etaf-screensaver-tests-bundled-scenes-run", "file": "tests/etaf-screensaver-tests.el", "purpose": "Every bundled scene renders and advances autonomously without workspace controls."},
     {"name": "etaf-screensaver-tests-invalid-start-rolls-back", "file": "tests/etaf-screensaver-tests.el", "purpose": "Bad configuration and scene failures leave the editor and resource inventory unchanged."},
     {"name": "etaf-screensaver-tests-external-buffer-kill-cleans-up", "file": "tests/etaf-screensaver-tests.el", "purpose": "Externally killing the presentation buffer restores windows and cancels animation."},
-    {"name": "etaf-screensaver-tests-loader-and-catalog", "file": "tests/etaf-screensaver-tests.el", "purpose": "Scene files replace registrations while a malformed file reports independently."}
+    {"name": "etaf-screensaver-tests-loader-and-catalog", "file": "tests/etaf-screensaver-tests.el", "purpose": "Scene files replace registrations while a malformed file reports independently."},
+    {"name": "etaf-screensaver-reel-tests-playback-follows-recording", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A registered reel plays frames in recording order, honors provider metadata and loops."},
+    {"name": "etaf-screensaver-reel-tests-wide-ansi-frames-keep-colors", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "ANSI recordings with wide characters publish centered colored canvas rows."},
+    {"name": "etaf-screensaver-reel-tests-imports-a-recording", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Importing a Terminal Text Effects recording copies it, writes a reel spec and the reel plays."},
+    {"name": "etaf-screensaver-reel-tests-batch-report-classifies-files", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Batch import reports compatible, unrecognized and invalid recordings separately."},
+    {"name": "etaf-screensaver-reel-tests-rejects-invalid-recordings", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Wrong versions, truncated streams and invalid frames signal errors and write nothing."},
+    {"name": "etaf-screensaver-reel-tests-loader-skips-broken-reels", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel spec with a missing recording is reported and skipped without disturbing other scenes."}
   ]
 }

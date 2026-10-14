@@ -24,7 +24,9 @@
 ;; owns one animation timer, a transient input map and an ephemeral buffer;
 ;; stopping releases all of these.  No child process is started.  This is not
 ;; a security lock.  Callbacks supplied by scene authors must be pure: they
-;; may not create processes/timers, perform I/O or alter editor state.
+;; may not create processes/timers or alter editor state.  A registered reel
+;; reads its recording once when its scene starts; no other scene callback
+;; performs I/O.
 ;;
 ;; Only the following declarations are public.  Unlisted symbols are private.
 ;; See docs/manual.md for playback composition, configuration and scene specs.
@@ -89,10 +91,58 @@
 ;;
 ;; Function: etaf-screensaver-load-scenes (&optional directories)
 ;;;###autoload (autoload 'etaf-screensaver-load-scenes "etaf-screensaver" nil t)
-;; Load .esc scene files from DIRECTORIES, defaulting to scene-directories,
-;; and return the number loaded.  Later directories override earlier ids.
-;; Bad files report a message and are skipped; other files still load.
-;; Load/reload outside presentation; changes are used by subsequent starts.
+;; Load .esc scene files and .esr reel files from DIRECTORIES, defaulting to
+;; scene-directories, and return the number loaded.  Later directories
+;; override earlier ids.  Bad files report a message and are skipped; other
+;; files still load.  Load/reload outside presentation; changes are used by
+;; subsequent starts.
+;;
+;; Function: etaf-screensaver-define-reel-provider (id &rest properties)
+;;;###autoload (autoload 'etaf-screensaver-define-reel-provider "etaf-screensaver" nil nil)
+;; Register the recorded-animation provider ID with PROPERTIES.
+;; PROPERTIES is a plist with :title and :license display strings,
+;; :extensions file name suffixes for batch import, :match (lambda (file))
+;; recognizing the format and :read (lambda (file)) returning the recording
+;; as :width, :height, :frame-rate, :frames and optional :durations
+;; (seconds per frame), :ansi (frame text carries SGR runs) and :source.
+;; Re-registering an ID replaces it in place.  The built-in `tte' provider
+;; reads Terminal Text Effects recordings without running the tool.
+;;
+;; Function: etaf-screensaver-register-reel (spec)
+;;;###autoload (autoload 'etaf-screensaver-register-reel "etaf-screensaver" nil nil)
+;; Register the recorded animation described by SPEC as a scene.
+;; SPEC is a plist, optionally wrapped as (etaf-reel ...), with :id,
+;; :provider and :recording plus optional :title, :summary, :tags, :width,
+;; :height, :frame-rate, :frame-count, :source, :license and :background.
+;; A relative :recording resolves against the reel file's directory.  The
+;; scene reads the recording when it is created, so an unused reel holds only
+;; metadata; playback follows the recording's own per-frame timing and
+;; centers its fixed canvas, cropping when the window is smaller.  Invalid
+;; specs signal etaf-screensaver-error.  Registering the same :id replaces
+;; the previous scene in place.
+;;
+;; Function: etaf-screensaver-import-recording (file &optional destination)
+;;;###autoload (autoload 'etaf-screensaver-import-recording "etaf-screensaver" nil t)
+;; Import one recording FILE as a reel and return its report plist.
+;; DESTINATION defaults to the user scene directory.  The native recording is
+;; copied next to a new .esr reel spec that names its provider, dimensions,
+;; frame count and license; it is validated first and never transcoded.
+;; The report holds :file, :status `imported', :provider, :title, :output,
+;; :recording, :width, :height, :frame-rate, :frame-count, :colors,
+;; :attributes, :license and :source.  A file no provider recognizes or a
+;; recording that fails validation signals etaf-screensaver-error and writes
+;; nothing.
+;;
+;; Function: etaf-screensaver-import-directory (directory &optional destination)
+;;;###autoload (autoload 'etaf-screensaver-import-directory "etaf-screensaver" nil t)
+;; Import every recording DIRECTORY holds and return a report plist.
+;; Candidate files use the extensions registered by reel providers.  An
+;; unrecognized file is skipped; a recognized file that fails validation is
+;; reported as failed.  Reels are written to DESTINATION (default: the user
+;; scene directory), and the report holds :directory, :destination and the
+;; :imported, :skipped and :failed lists so callers can audit compatibility,
+;; dimensions, color use and license before playing anything.  Register the
+;; new reels with etaf-screensaver-load-scenes afterwards.
 ;;
 ;; Variable: etaf-screensaver-idle-delay
 ;; Positive idle seconds before automatic presentation, default 300.

@@ -21,6 +21,26 @@ adjacent colors. The expression interpreter evaluates only its whitelist;
 argument traversal does not allocate a closure per expression. The engine
 owns no timer or input handler.
 
+## Recorded animations
+
+Reels adapt external animation recordings without reimplementing their
+algorithms. A provider turns one native format into frame strings and
+metadata; it is registered by id with match and read functions, extension
+hints and a license. The built-in `tte` provider validates Terminal Text
+Effects recordings, a zlib stream of tagged records, and converts SGR runs
+into the same face properties the canvas uses. No provider runs a process:
+playback reads bytes and leaves the recording in its native format.
+
+The reel layer owns provider-independent behavior: per-frame timing from the
+recording, looping, lazy per-frame SGR conversion, wide-character aware
+center fitting and a small cache of recent unchanged reads. Registration
+validates metadata and the referenced file but not frames, so an unused reel
+costs only its spec; the first playback verifies frame shape. Importing
+copies a recording beside a `.esr` spec and reports compatibility,
+dimensions, color depths and license per file instead of claiming universal
+support. The loader scans `.esr` specs beside `.esc` scenes and skips a
+broken spec without disturbing the others.
+
 ## Presentation lifecycle
 
 Start validates and prepares the initial scene before replacing windows.

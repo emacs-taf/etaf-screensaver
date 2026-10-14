@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-beams :title "Terminal Text Effects: beams" :summary "beams (Terminal Text Effects) recording, 80×24, 322 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "beams.tterec" :width 80 :height 24 :frame-rate 20 :frame-count 322 :source "beams" :license "MIT")

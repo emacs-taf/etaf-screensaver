@@ -322,8 +322,9 @@ from a random direction).
 ## Scene files
 
 `etaf-screensaver-scene-directories` lists the scanned directories in order.
-Each `*.esc` file holds exactly one `(etaf-scene ...)` form. Bundled scenes
-live in `lisp/scenes`; the default user directory is
+Each `*.esc` file holds exactly one `(etaf-scene ...)` form and each `*.esr`
+file one `(etaf-reel ...)` form. Bundled scenes live in `lisp/scenes` and
+bundled reels in `lisp/reels`; the default user directory is
 `~/.emacs.d/etaf-screensaver/scenes`. A later directory replaces a scene whose
 `:id` matches, so a user file overrides a bundled scene.
 
@@ -332,7 +333,89 @@ live in `lisp/scenes`; the default user directory is
   skipped while the rest still load.
 - Call the loader outside presentation after editing files, then start a new
   presentation to use the updated registrations.
-- `etaf-screensaver-register-scene` registers a spec programmatically.
+- `etaf-screensaver-register-scene` registers a spec programmatically, and
+  `etaf-screensaver-register-reel` registers a recorded animation directly.
+
+## Recorded animations
+
+A *reel* plays a recording that an external animation tool produced, without
+running that tool or transcribing its algorithms. The native recording stays
+in its own format; a small `.esr` spec names the provider, dimensions, frame
+count and license. Playback follows the recording's own per-frame timing and
+centers its fixed canvas, cropping both edges in a smaller window. A scene
+duration longer than the recording loops it.
+
+Terminal Text Effects (TTE) recordings (`*.tterec`) are supported out of the
+box. Record one with the tool, then import it:
+
+```sh
+echo "Hello" | tte --record animation.tterec --seed 7 --canvas-width 80 \
+  --canvas-height 24 --anchor-text c --anchor-canvas c matrix
+```
+
+```elisp
+(etaf-screensaver-import-recording "/path/animation.tterec")
+(etaf-screensaver-load-scenes)
+(etaf-screensaver-start 'tte-animation)
+```
+
+`etaf-screensaver-import-recording` validates the recording, copies it beside
+a new `.esr` spec in the user scene directory and returns a report plist. It
+signals `etaf-screensaver-error` for an unrecognized format or an invalid
+recording and writes nothing. Importing never transcodes frames: replacing
+the recording file re-reads it at the next start.
+
+For several files:
+
+```elisp
+(etaf-screensaver-import-directory "~/recordings")
+```
+
+The batch report holds `:imported`, `:skipped` and `:failed` lists. Every
+imported entry names the provider, output spec, canvas, frame rate, frame
+count, color depths and license, so incompatible files are visible before
+playback instead of silently accepted. Only extensions registered by a
+provider are scanned; a recognized file whose content fails validation is
+reported as failed. Files other providers own are ignored, not claimed.
+
+An `.esr` file is ordinary Lisp data and may be written by hand:
+
+```elisp
+(etaf-reel :id tte-matrix :provider tte :recording "matrix.tterec"
+           :title "Terminal Text Effects: matrix"
+           :width 80 :height 24 :frame-rate 20 :frame-count 306
+           :source "matrix" :license "MIT")
+```
+
+A relative `:recording` resolves against the directory of the `.esr` file.
+`lisp/reels` ships three recordings produced with Terminal Text Effects 0.15.0
+(commit 6dbc34a0, MIT) from the text `ETAF`: the beams, synthgrid and
+thunderstorm effects, which is why the default program includes `tte-beams`,
+`tte-synthgrid` and `tte-thunderstorm`. The MIT license covers the TTE tool
+and these bundled recordings' generation; verify the rights of your own input
+text before publishing a recording.
+
+A provider for another tool registers a reader:
+
+```elisp
+(etaf-screensaver-define-reel-provider 'my-tool
+  :title "My Animation Tool"
+  :license "MIT"
+  :extensions '("myanim")
+  :match (lambda (file) (string-suffix-p ".myanim" file))
+  :read (lambda (file)
+          (list :width 80 :height 24 :frame-rate 30
+                :ansi t                 ; frame text may carry SGR runs
+                :frames (my-tool-read-frames file))))
+```
+
+`:read` must return `:width` and `:height` in cells, `:frame-rate` and a
+nonempty `:frames` vector of frame strings whose rows have exactly that
+width; optional `:durations` gives seconds per frame, `:ansi` marks SGR runs
+and `:source` names the work. Providers are trusted code and run in the
+presentation's thread. Recordings are read once when their scene starts and
+recent unchanged reads are cached, so a registered but unused reel holds only
+metadata, and an invalid recording reports at import or at first playback.
 
 ## Code scenes
 
@@ -364,6 +447,8 @@ language cannot express.
 
 - Quantize palettes and merge adjacent color runs; arbitrary per-cell colors
   cost more to publish than coherent runs.
+- Recorded reels convert SGR runs once per frame and slice cached cells on
+  resize, and recent unchanged recordings are decompressed once per session.
 - Use `:frame-rate` and the global cap to bound refresh work. Playback stops
   and cleans up if its buffer/window disappears; no hidden animation probe
   remains running.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- Recorded-animation reels adapt external tools without transcribing their
+  algorithms. The built-in `tte` provider reads Terminal Text Effects
+  recordings, and `etaf-screensaver-import-recording` and
+  `etaf-screensaver-import-directory` validate, copy and report compatible
+  files with dimensions, color depths and license. Three recorded reels ship
+  in `lisp/reels` and join the default program. Other tools can register a
+  reader through `etaf-screensaver-define-reel-provider`.
+
 ### Changed
 
 - The application is now a canvas-only screensaver. Configure it in Lisp or

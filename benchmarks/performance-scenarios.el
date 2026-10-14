@@ -33,7 +33,7 @@
                           t "The autonomous scene did not publish another frame")))
           :cleanup #'etaf-screensaver-stop)))
 
-(dolist (scene '(plasma matrix life quotes))
+(dolist (scene '(plasma matrix life quotes tte-thunderstorm))
   (taf-benchmark-register
    (format "etaf-screensaver.frame.%s" scene)
    :version 2 :modes '(batch gui) :isolation 'series :impact 'local

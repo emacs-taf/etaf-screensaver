@@ -13,22 +13,28 @@
 (require 'etaf-screensaver)
 (require 'emacs-gui-verifier)
 
-(defun etaf-screensaver-gui--action (id execute verify)
+(defun etaf-screensaver-gui--action (id execute verify &optional settle-timeout)
   "Create screenshot action ID with EXECUTE and VERIFY."
   (etaf-gui-verifier-action-create
-   :id id :execute execute :screenshot t :settled-p verify :settle-timeout 5
+   :id id :execute execute :screenshot t :settled-p verify
+   :settle-timeout (or settle-timeout 5)
    :assertions (lambda (context)
                  (list (etaf-gui-verifier-assert id (funcall verify context))))))
 
 (defun etaf-screensaver-gui--scenario ()
   "Return the presentation-only lifecycle scenario."
-  (let (editor)
+  (let (editor original-fullscreen)
     (etaf-gui-verifier-scenario-create
      :name "etaf-screensaver"
      :claim "Only animation is shown; input restores the editor and releases playback"
      :initialize
      (lambda (context)
        (etaf-screensaver-mode -1)
+       ;; A maximized/fullscreen frame cannot follow the layout actions; the
+       ;; user's init may start one, so leave it normal for the run.
+       (setq original-fullscreen (frame-parameter nil 'fullscreen))
+       (when original-fullscreen
+         (set-frame-parameter nil 'fullscreen nil))
        (setq editor (generate-new-buffer " *Screensaver GUI editor*"))
        (with-current-buffer editor (insert "Editor restored. No wake input is replayed."))
        (switch-to-buffer editor)
@@ -62,7 +68,31 @@
             (let ((status (etaf-screensaver-status)))
               (and (eq (plist-get status :scene) scene)
                    (>= (or (plist-get status :ticks) 0) 2))))))
-       '(banner donut falling-sand life matrix plasma quotes snow starfield))
+       '(banner donut falling-sand life matrix plasma quotes snow starfield
+                tte-beams tte-synthgrid tte-thunderstorm))
+      (list
+       (etaf-screensaver-gui--action
+        "reel-beams-mid"
+        (lambda (context)
+          (etaf-screensaver-stop)
+          (setf (etaf-gui-verifier-context-target-buffer context)
+                (etaf-screensaver-start 'tte-beams)))
+        (lambda (_context)
+          (let ((status (etaf-screensaver-status)))
+            (and (eq (plist-get status :scene) 'tte-beams)
+                 (>= (or (plist-get status :ticks) 0) 120))))
+        12)
+       (etaf-screensaver-gui--action
+        "reel-synthgrid-mid"
+        (lambda (context)
+          (etaf-screensaver-stop)
+          (setf (etaf-gui-verifier-context-target-buffer context)
+                (etaf-screensaver-start 'tte-synthgrid)))
+        (lambda (_context)
+          (let ((status (etaf-screensaver-status)))
+            (and (eq (plist-get status :scene) 'tte-synthgrid)
+                 (>= (or (plist-get status :ticks) 0) 80))))
+        10))
       (mapcar
        (lambda (size)
          (etaf-screensaver-gui--action
@@ -97,6 +127,8 @@
                           "Editor restored. No wake input is replayed."))))))
        '(key mouse-movement mouse-1 wheel-down)))
      :completion (lambda (_context)
+                   (when original-fullscreen
+                     (set-frame-parameter nil 'fullscreen original-fullscreen))
                    (and (not (plist-get (etaf-screensaver-status) :active))
                         (eq (window-buffer) editor))))))
 

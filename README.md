@@ -54,10 +54,12 @@ Groups support `sequential`, `shuffle` (each child once per bag) and `random`
         (donut :duration 40 :params ((speed . 4) (detail . fine)))))
 ```
 
-The default program shuffles all nine bundled scenes: banner, donut,
-falling-sand, life, matrix, plasma, quotes, snow and starfield.
+The default program shuffles twelve bundled scenes: banner, donut,
+falling-sand, life, matrix, plasma, quotes, snow and starfield plus the
+recorded reels tte-beams, tte-synthgrid and tte-thunderstorm.
 See the [manual](docs/manual.md) for program composition, durations, frame-rate
-caps, repeatable seeds, custom scene files and callback authoring.
+caps, repeatable seeds, custom scene files, recorded-animation import and
+callback authoring.
 The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 
 ## Development

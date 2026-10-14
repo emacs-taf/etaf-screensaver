@@ -184,7 +184,8 @@
 (ert-deftest etaf-screensaver-tests-bundled-scenes-run ()
   "All bundled scenes publish autonomous frames without a control surface."
   (etaf-screensaver-tests--clean
-    (dolist (scene '(banner donut falling-sand life matrix plasma quotes snow starfield))
+    (dolist (scene '(banner donut falling-sand life matrix plasma quotes snow starfield
+                          tte-beams tte-synthgrid tte-thunderstorm))
       (ert-info ((format "Scene: %s" scene))
         (let ((buffer (etaf-screensaver-start scene)))
           (let ((deadline (+ (float-time) 1)))
