@@ -6,7 +6,7 @@
 ;;
 ;; The generic layer kinds a spec can stack: life, rain, sand, particles,
 ;; field and text.  Each kind registers a VALIDATE, CREATE, STEP, DRAW and
-;; optional RESIZE and POINTER function with the DSL registry and receives
+;; optional RESIZE function with the DSL registry and receives
 ;; the layer plist, its own state, the engine context and the frame canvas.
 ;; Adding a new kind is one `etaf-screensaver--define-layer-kind' call; no
 ;; part of the engine or the workspace changes.
@@ -318,27 +318,7 @@ listed in its own :flows-through."
                       (etaf-screensaver--canvas-draw
                        canvas row column
                        (or (plist-get material :char) ?#)
-                       (plist-get material :color)))))))))
-  :pointer (lambda (layer state context event)
-             (let* ((env (etaf-screensaver--dsl-env context))
-                    (materials (etaf-screensaver--sand-materials layer))
-                    (brush (etaf-screensaver--dsl-value
-                            (etaf-screensaver--layer-property layer :brush nil) env))
-                    (size (max 1 (round (etaf-screensaver--layer-number
-                                         (etaf-screensaver--layer-property layer :brush-size 1)
-                                         env 1))))
-                    (radius (/ (1- size) 2))
-                    (index (or (etaf-screensaver--sand-index materials brush) 0))
-                    (row (plist-get event :row))
-                    (column (plist-get event :column))
-                    (cells (plist-get state :cells))
-                    (rows (plist-get state :rows))
-                    (columns (plist-get state :columns)))
-               (cl-loop for r from (- row radius) to (+ row radius) do
-                        (cl-loop for c from (- column radius) to (+ column radius) do
-                                 (when (and (>= r 0) (< r rows) (>= c 0) (< c columns))
-                                   (aset cells (+ (* r columns) c) index))))
-               t)))
+                       (plist-get material :color))))))))))
 
 ;;; particles -- numeric particles driven by expressions.
 

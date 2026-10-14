@@ -2,8 +2,25 @@
 
 ## Unreleased
 
-### Fixed
+### Changed
 
+- The application is now a canvas-only screensaver. Configure it in Lisp or
+  Customize; any key, mouse movement, completed click or wheel input wakes it.
+  Dismissal restores the editor and releases all presentation resources.
+- Playback programs compose sequential, shuffled and random groups, including
+  nested animation sequences, selection counts and per-scene settings.
+- **Breaking:** replace `etaf-screensaver-open`/`present` with
+  `etaf-screensaver-start`, `close` with `etaf-screensaver-stop`, and
+  `etaf-screensaver-idle-mode` with `etaf-screensaver-mode`. Workspace controls
+  (pause, resume, step, reset, select-scene, set-param, set-frame-rate and
+  set-seed) are removed; use the program and scene-options configuration.
+  Replace default-scene/cycle-seconds with program/scene-duration. Status no
+  longer takes a buffer name. Use `etaf-screensaver-load-scenes` before a new
+  start instead of live reload. Scene pointer callbacks and sand painting
+  are removed because pointer input always wakes the editor.
+- ETAF UI is no longer a runtime dependency.
+
+### Fixed
 - Scenes can draw Unicode symbols and mixed-width text on Emacs 31, including
   Matrix, Life and Chinese quotes, without failing to write a canvas cell.
 - Random expressions use the session seed throughout the scene lifecycle,

@@ -11,12 +11,12 @@ EMACSCLIENT ?= emacsclient
 # Providers live beside the application (standalone) or two levels up (workspace).
 PROVIDER_ROOT := $(if $(wildcard ../etaf/etaf.el),..,$(if $(wildcard ../../etaf/etaf.el),../..,))
 
-LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf -L $(PROVIDER_ROOT)/etaf-ui \
+LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf \
             -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss -L $(PROVIDER_ROOT)/etaf/scripts
 
 SOURCES = $(wildcard lisp/*.el) etaf-screensaver.el
 SOURCES += scripts/etaf-screensaver-gui-scenarios.el
-SOURCES += $(wildcard benchmarks/*.el)
+SOURCES += $(wildcard benchmarks/*.el) $(wildcard tests/*.el)
 
 .PHONY: all compile load test check structure-check setup-hooks acceptance api-check gui clean
 

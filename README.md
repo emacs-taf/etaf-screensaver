@@ -1,104 +1,77 @@
 # etaf-screensaver
 
 Generative screensavers for Emacs, built on [ETAF](https://github.com/emacs-taf/etaf).
-A screensaver is a **scene spec**: a small data file that stacks generic layers
-(automata, materials, particles, fields, text, terminal effects) and drives them
-with a pure expression language. Add a scene by dropping a `.esc` file into a
-directory; no Lisp is required. Faster, richer scenes can still register code
-callbacks through the public macro.
+After an idle interval, animation fills the current frame's editing area.
+A key, mouse movement, click or wheel input dismisses it and restores the
+previous windows. There are no controls, parameter panels or status bars.
+Configuration belongs in Emacs Lisp or `M-x customize-group RET etaf-screensaver`.
 
-## Requirements
+This is a visual screensaver, **not a security lock**. It creates no child
+processes. Dismissal releases its animation timer, transient input map and
+buffer; automatic mode retains only its idle watcher and rearming hook.
+Disabling the mode releases those too.
 
-- Emacs 29.1 or later.
-- The framework checkouts `etaf`, `etaf-ui`, `ebox` and `ecss` on `load-path`
-  (beside this repository, or two levels up in the workspace layout).
+## Requirements and setup
 
-## Install and run
-
-Add this repository root and the four provider roots to `load-path`, then:
+Emacs 29.1 or later and the `etaf`, `ebox` and `ecss` provider roots on
+`load-path`. Providers may be beside this repository or two levels up in the
+`emacs-taf/etaf-apps` workspace layout. Add this repository root as well:
 
 ```elisp
 (require 'etaf-screensaver)
-M-x etaf-screensaver-open          ; interactive workspace
-M-x etaf-screensaver-present       ; full-window screensaver, any key wakes
+(setq etaf-screensaver-idle-delay 300
+      etaf-screensaver-program
+      '(:order shuffle :scenes (matrix snow donut plasma)))
+(etaf-screensaver-mode 1)
 ```
 
-`M-x etaf-screensaver-idle-mode` presents a screensaver after
-`etaf-screensaver-idle-delay` seconds of idle time.
+- `M-x etaf-screensaver-start`: start now, using the same configured program.
+- `M-x etaf-screensaver-mode`: enable or disable automatic idle presentation.
+- `M-x etaf-screensaver-stop`: explicit, idempotent dismissal.
 
-## Keys
+The first wake event is consumed, not replayed into your document. Clicks wake
+on button release so the rest of the click cannot activate restored controls.
+Automatic activation avoids an active minibuffer and unfocused or hidden frames.
+The animation adapts to the available character grid; tiny windows clip artwork
+instead of shrinking its characters. No additional Emacs frame is created.
 
-| Key | Action |
-| --- | --- |
-| `SPC` | play or pause |
-| `n` | pause and advance exactly one frame |
-| `s` / `S` | next or previous scene |
-| `+` / `-` | raise or lower the frame rate |
-| `TAB` | open or close the parameter panel |
-| `r` | reset the scene at the same seed |
-| `R` | reset with a fresh random seed |
-| `c` | toggle cinema mode (canvas only) |
-| `l` | reload the scene spec files |
-| `?` | key help |
-| `q` | close |
+## Playback configuration
 
-The parameter panel edits the current scene through the catalog's Slider,
-Segmented and Switch components; `etaf-screensaver-set-param` changes the same
-parameters from Lisp. Present mode hides the chrome, cycles scenes every
-`etaf-screensaver-cycle-seconds` and returns the previous window configuration
-when any key is pressed.
-
-## Bundled scenes
-
-| Scene | What it shows |
-| --- | --- |
-| `banner` | an ASCII banner revealed by random terminal effects, looping |
-| `donut` | the classic rotating torus with a z-buffer and a luminance ramp |
-| `falling-sand` | sand, water and walls with mouse painting and passive sand rain |
-| `life` | Conway's Game of Life with an automatic reseed |
-| `matrix` | digital rain with per-column glyphs and a green face |
-| `plasma` | four sine waves quantized into a palette, merged into color runs |
-| `quotes` | a centered block of text scrolling upwards |
-| `snow` | drifting flakes that sway and wrap around the canvas |
-| `starfield` | stars flying past with depth-based brightness |
-
-## Adding a screensaver
-
-Write one scene spec file, for example `~/.emacs.d/etaf-screensaver/scenes/rainbow.esc`:
+A program is a scene, a configured scene item, or a group of programs.
+Groups support `sequential`, `shuffle` (each child once per bag) and `random`
+(with replacement). The program repeats until input wakes the editor.
 
 ```elisp
-(etaf-scene
- :id rainbow
- :title "彩虹"
- :summary "彩色正弦带"
- :frame-rate 12
- :params ((:key speed :label "速度" :type number :min 1 :max 8 :step 1 :default 3))
- :layers ((:kind field
-           :value (sin (+ (* 0.2 x) (* speed t)))
-           :range (-1 1)
-           :ramp " .:-=+*#%@"
-           :palette ("#101A3A" "#1B3A6E" "#2E9E9B" "#B3E3A0" "#F2F7C8"))))
+;; Randomly order two groups; preserve the order inside the first group.
+(setq etaf-screensaver-program
+      '(:order shuffle
+        :scenes ((:order sequential :scenes (matrix starfield))
+                 (:order random :count 3 :scenes (snow plasma donut)))))
+
+;; Scene-specific defaults; a program item can override them.
+(setq etaf-screensaver-scene-options
+      '((matrix :duration 20 :params ((speed . 5)))
+        (donut :duration 40 :params ((speed . 4) (detail . fine)))))
 ```
 
-Then load it with `M-x etaf-screensaver-reload-scenes` (or `l` in the workspace);
-the scene joins the switcher, the cycle and the parameter panel immediately.
-`etaf-screensaver-scene-directories` lists the scanned directories; a user
-scene replaces a bundled scene with the same `:id`.
-
-The full spec reference -- every layer and property, the expression language
-and the callback escape hatch -- is in [docs/manual.md](docs/manual.md).
+The default program shuffles all nine bundled scenes: banner, donut,
+falling-sand, life, matrix, plasma, quotes, snow and starfield.
+See the [manual](docs/manual.md) for program composition, durations, frame-rate
+caps, repeatable seeds, custom scene files and callback authoring.
+The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 
 ## Development
 
 ```sh
-make check     # repository structure, compilation, acceptance, public API
-make test      # acceptance only
-make compile   # byte-compilation with warnings as errors
-make clean
+make check          # structure, compilation, public acceptance and API bindings
+make gui SERVER=... # maintained scenario in an owned graphical Emacs server
 ```
 
-Frame-publication workloads are registered in `benchmarks/performance-scenarios.el`.
-From the enclosing `emacs-taf` workspace, run:
+The GUI scenario covers scene rendering, resize and native command-loop wake
+routing. Actual automatic activation and physical mouse input require a focused
+idle/input pass; background screenshots do not certify that interaction.
+
+From the enclosing workspace, measure autonomous frame cadence with:
 
 ```sh
 python3 scripts/performance.py run --mode batch \
@@ -106,14 +79,9 @@ python3 scripts/performance.py run --mode batch \
   --load-path etaf-apps/etaf-screensaver --scenario 'etaf-screensaver.frame.*'
 ```
 
-These workloads step seeded, paused scenes; they measure computation and
-publication rather than timer cadence. See the workspace performance manual
-for baseline comparison and GUI measurement.
-
-The GUI workflow (`make gui`) runs the maintained scenario in a graphical
-Emacs server and leaves screenshots in a fresh evidence directory. On Windows,
-set `PYTHONUTF8=1` if you invoke the Python policy tools directly; the
-Makefile and hooks already pass `-X utf8` / `PYTHONUTF8=1`.
+A sample includes waiting for the next frame, computation and publication.
+It is not the retired manual-step workload. See [architecture](docs/architecture.md)
+for ownership and cleanup invariants.
 
 ## License
 

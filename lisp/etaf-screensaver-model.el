@@ -6,8 +6,7 @@
 ;;
 ;; A scene is a data description plus pure callbacks: CREATE builds its state,
 ;; STEP advances it by one frame, RENDER projects it into canvas rows, and the
-;; optional RESIZE and POINTER callbacks let it follow the canvas or react to
-;; the mouse.  Scene state is caller-owned and a scene never touches buffers,
+;; optional RESIZE callback lets it follow the canvas.  Scene state is caller-owned and a scene never touches buffers,
 ;; timers, files or the network, so every scene runs headless.
 ;;
 ;; Registering a scene is a side effect of loading its file.  The registry
@@ -22,7 +21,7 @@
 
 (defconst etaf-screensaver--scene-keys
   '(:title :summary :tags :frame-rate :background :params
-    :create :step :render :resize :pointer)
+    :create :step :render :resize)
   "Property keys accepted by `etaf-screensaver-define-scene'.")
 
 (cl-defstruct (etaf-screensaver--scene (:constructor etaf-screensaver--scene-make))
@@ -30,8 +29,8 @@
 ID is the registration symbol; TITLE and SUMMARY are display strings; TAGS is
 a list of symbols; FRAME-RATE is the scene's preferred frames per second;
 BACKGROUND overrides the canvas color; PARAMS is a list of validated parameter
-descriptors; CREATE, STEP, RENDER, RESIZE and POINTER are the scene callbacks."
-  id title summary tags frame-rate background params create step render resize pointer)
+descriptors; CREATE, STEP, RENDER and RESIZE are the scene callbacks."
+  id title summary tags frame-rate background params create step render resize)
 
 (defvar etaf-screensaver--scenes nil
   "Registered scenes in display order, as (ID . SCENE) pairs.")
@@ -122,7 +121,7 @@ the description in place, keeping display order."
   (dolist (key '(:create :step :render))
     (unless (functionp (plist-get properties key))
       (etaf-screensaver--fail "Scene %s needs a function for %s" id key)))
-  (dolist (key '(:resize :pointer))
+  (dolist (key '(:resize))
     (let ((value (plist-get properties key)))
       (unless (or (null value) (functionp value))
         (etaf-screensaver--fail "Scene %s %s must be a function or nil" id key))))
@@ -154,8 +153,7 @@ the description in place, keeping display order."
                    :create (plist-get properties :create)
                    :step (plist-get properties :step)
                    :render (plist-get properties :render)
-                   :resize (plist-get properties :resize)
-                   :pointer (plist-get properties :pointer)))
+                   :resize (plist-get properties :resize)))
            (keys (mapcar (lambda (param) (plist-get param :key))
                          (etaf-screensaver--scene-params scene))))
       (unless (= (length keys) (length (delete-dups (copy-sequence keys))))
@@ -177,7 +175,7 @@ PROPERTIES is a plist with these keys:
   :summary     one-line description of what the scene shows
   :tags        list of symbols used for grouping
   :frame-rate  preferred frames per second (default 15)
-  :background  canvas color overriding the workspace background
+  :background  canvas color overriding the configured background
   :params      list of parameter descriptors, each a plist with
                :key, :label, :type and :default; a number also takes
                :min, :max, :step, a choice takes :options as an alist
@@ -189,12 +187,12 @@ PROPERTIES is a plist with these keys:
   :resize      optional (lambda (state context)) returning a state that
                fits a canvas that changed size; without it the engine
                recreates the state at the same seed
-  :pointer     optional (lambda (state context event)) receiving
-               (:phase start|move|end :row ROW :column COLUMN ...)
 
 The context plist passed to the callbacks holds :columns, :rows, :seed,
 :tick, :elapsed, :dt, :param (a key to value function) and :random (a
-function of a positive limit returning a number below it).
+function returning a float in [0,1), or an integer below a positive limit).
+Callbacks must not create timers or processes, perform I/O or change editor
+state; the presentation owns resources and all input dismisses it.
 
 Registering is a file-load side effect; registering the same ID again
 replaces the previous description in place."

@@ -306,9 +306,8 @@ display column."
 
 (defvar etaf-screensaver--layer-kinds nil
   "Registered layer kinds as (KIND . PLIST) pairs.
-PLIST holds :validate, :create, :step, :draw and the optional :resize and
-:pointer functions; see the source of etaf-screensaver-layers.el for the
-contract.")
+PLIST holds :validate, :create, :step, :draw and optional :resize
+functions; see etaf-screensaver-layers.el for the contract.")
 
 (defun etaf-screensaver--define-layer-kind (kind &rest properties)
   "Register a layer KIND with PROPERTIES and return its plist.
@@ -412,16 +411,7 @@ be interpreted."
                   (setcdr entry (if resize
                                     (funcall resize (car entry) (cdr entry) context)
                                   (when create (funcall create (car entry) context)))))))
-            state)
-          :pointer
-          (lambda (state context event)
-            (let ((etaf-screensaver--dsl-random (plist-get context :random)))
-              (cl-loop for entry in (plist-get state :layers)
-                       for pointer = (etaf-screensaver--layer-function
-                                      (plist-get (car entry) :kind) :pointer)
-                       when (and pointer (funcall pointer (car entry) (cdr entry)
-                                                  context event))
-                       return t))))))
+            state))))
 
 (defun etaf-screensaver-register-scene (spec)
   "Register the scene described by SPEC and return the scene.

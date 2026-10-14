@@ -1,79 +1,19 @@
 {
   "schema": 1,
-  "load_path": [
-    ".",
-    "lisp",
-    "tests",
-    "../etaf",
-    "../etaf-ui",
-    "../ebox",
-    "../ecss",
-    "../../etaf",
-    "../../etaf-ui",
-    "../../ebox",
-    "../../ecss"
-  ],
+  "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
-    {
-      "name": "etaf-screensaver-tests-open-mounts-and-close-releases",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Opening mounts a live runtime with a rendered frame and closing kills its buffer."
-    },
-    {
-      "name": "etaf-screensaver-tests-scenes-register-and-describe",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "The catalog lists the bundled code and data scenes and describes each by id or title."
-    },
-    {
-      "name": "etaf-screensaver-tests-step-advances-one-frame",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Stepping pauses the workspace and advances exactly one visible frame."
-    },
-    {
-      "name": "etaf-screensaver-tests-controls-publish-status",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Pause, resume, reset, seed and frame rate each publish their documented status."
-    },
-    {
-      "name": "etaf-screensaver-tests-params-drive-the-scene",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Setting a scene parameter changes what the next frame renders."
-    },
-    {
-      "name": "etaf-screensaver-tests-select-scene-switches-and-validates",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Switching scenes updates the workspace and unknown scene names are rejected."
-    },
-    {
-      "name": "etaf-screensaver-tests-spec-scene-renders-and-takes-params",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "A data scene evaluates the spec language and follows its parameters."
-    },
-    {
-      "name": "etaf-screensaver-tests-unicode-scene-publishes-text",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Mixed ASCII, CJK, block symbols and supplementary Unicode text retain their characters and color across frame publications."
-    },
-    {
-      "name": "etaf-screensaver-tests-random-particles-follow-seed",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Random particle initialization and updates replay the same visible frame after resetting the session seed."
-    },
-    {
-      "name": "etaf-screensaver-tests-bundled-scenes-publish-frames",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "All nine bundled scenes open and publish stepped frames without canvas errors."
-    },
-    {
-      "name": "etaf-screensaver-tests-reload-rebuilds-the-mounted-scene",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Reloading the scene files refreshes the mounted scene in place."
-    },
-    {
-      "name": "etaf-screensaver-tests-loader-reads-and-overrides-files",
-      "file": "tests/etaf-screensaver-tests.el",
-      "purpose": "Scene files load, replace by id and skip broken files without stopping the load."
-    }
+    {"name": "etaf-screensaver-tests-restores-and-releases", "file": "tests/etaf-screensaver-tests.el", "purpose": "Repeated start and stop restore windows and release timers, input interception, tracking and buffers without starting processes."},
+    {"name": "etaf-screensaver-tests-key-wakes-without-editing", "file": "tests/etaf-screensaver-tests.el", "purpose": "A wake key restores the original buffer without editing it."},
+    {"name": "etaf-screensaver-tests-pointer-wakes", "file": "tests/etaf-screensaver-tests.el", "purpose": "Mouse movement, a complete click and wheel input dismiss the presentation."},
+    {"name": "etaf-screensaver-tests-mode-is-idempotent", "file": "tests/etaf-screensaver-tests.el", "purpose": "Automatic mode owns one idle watcher and disabling it releases both watcher and presentation."},
+    {"name": "etaf-screensaver-tests-program-order-and-options", "file": "tests/etaf-screensaver-tests.el", "purpose": "Nested groups preserve sequence boundaries and scene options merge with item settings."},
+    {"name": "etaf-screensaver-tests-shuffle-and-random", "file": "tests/etaf-screensaver-tests.el", "purpose": "Shuffle covers each bag once; random selection honors its count and seeded playback is repeatable."},
+    {"name": "etaf-screensaver-tests-timed-cycle", "file": "tests/etaf-screensaver-tests.el", "purpose": "Actual timer-driven playback advances scenes and repeats the configured program."},
+    {"name": "etaf-screensaver-tests-unicode-and-seeded-particles", "file": "tests/etaf-screensaver-tests.el", "purpose": "Canvas-only output preserves mixed Unicode text, color and repeatable particle initialization."},
+    {"name": "etaf-screensaver-tests-bundled-scenes-run", "file": "tests/etaf-screensaver-tests.el", "purpose": "Every bundled scene renders and advances autonomously without workspace controls."},
+    {"name": "etaf-screensaver-tests-invalid-start-rolls-back", "file": "tests/etaf-screensaver-tests.el", "purpose": "Bad configuration and scene failures leave the editor and resource inventory unchanged."},
+    {"name": "etaf-screensaver-tests-external-buffer-kill-cleans-up", "file": "tests/etaf-screensaver-tests.el", "purpose": "Externally killing the presentation buffer restores windows and cancels animation."},
+    {"name": "etaf-screensaver-tests-loader-and-catalog", "file": "tests/etaf-screensaver-tests.el", "purpose": "Scene files replace registrations while a malformed file reports independently."}
   ]
 }

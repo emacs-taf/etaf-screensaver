@@ -1,50 +1,44 @@
 ;;; -*- lexical-binding: t; -*-
-;;; performance-scenarios.el --- Screensaver frame publication workloads
+;;; performance-scenarios.el --- Autonomous screensaver frame cadence
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
-;; Run through the workspace scripts/performance.py driver.  Each workload
-;; steps a paused, seeded scene through its public API and checks the published
-;; HUD.  This measures frame computation and publication, not timer cadence.
+;; Run through the workspace performance.py driver.  A sample waits for the
+;; next autonomous frame, including timer wait, computation and publication.
+;; Version 2 replaces the retired manual-step workspace workload and is not
+;; comparable to it.  Cleanup restores the driver's original window state.
 
 ;;; Code:
 (require 'etaf-screensaver)
 (declare-function taf-benchmark-register "performance-driver" (id &rest properties))
 
 (defun etaf-screensaver-benchmark--fixture (scene)
-  "Return a seeded frame-publication fixture for SCENE."
-  (let* ((name (generate-new-buffer-name " *Screensaver benchmark*"))
-         (buffer (etaf-screensaver-open scene name))
+  "Return an autonomous, seeded frame fixture for SCENE."
+  (let* ((etaf-screensaver-seed 4242)
+         (etaf-screensaver-max-frame-rate 30)
+         (buffer (etaf-screensaver-start (list :scene scene :duration 3600 :frame-rate 30)))
          (ticks 0))
-    (etaf-screensaver-pause name)
-    (etaf-screensaver-set-seed 4242 name)
-    (list
-     :buffer buffer
-     :invoke (lambda (_index)
-               (etaf-screensaver-step name)
-               (cl-incf ticks))
-     :verify (lambda ()
-               (let ((status (etaf-screensaver-status name))
-                     (text (with-current-buffer buffer
-                             (buffer-substring-no-properties (point-min) (point-max)))))
-                 (if (and (eq (plist-get status :scene) scene)
-                          (eq (plist-get status :status) 'paused)
-                          (= (plist-get status :ticks) ticks)
-                          (not (plist-get status :notice))
-                          (string-match-p "已暂停" text))
-                     t
-                   "Scene did not publish a paused frame without an error")))
-     :cleanup (lambda ()
-                (when (buffer-live-p buffer)
-                  (etaf-screensaver-close name))))))
+    (list :buffer buffer
+          :prepare (lambda () (setq ticks (plist-get (etaf-screensaver-status) :ticks)))
+          :invoke #'ignore
+          :settled (lambda ()
+                     (let ((now (plist-get (etaf-screensaver-status) :ticks)))
+                       (and now (> now ticks))))
+          :verify (lambda ()
+                    (let ((status (etaf-screensaver-status)))
+                      (if (and (plist-get status :active)
+                               (eq (plist-get status :scene) scene)
+                               (> (plist-get status :ticks) ticks))
+                          t "The autonomous scene did not publish another frame")))
+          :cleanup #'etaf-screensaver-stop)))
 
 (dolist (scene '(plasma matrix life quotes))
   (taf-benchmark-register
    (format "etaf-screensaver.frame.%s" scene)
-   :version 1 :modes '(batch gui) :isolation 'series :impact 'local
-   :budget-ms 50
-   :description (format "Step and publish a seeded %s scene" scene)
+   :version 2 :modes '(batch gui) :isolation 'series :impact 'local
+   :budget-ms 100
+   :description (format "Wait for the next autonomous %s frame at a 30 fps cap" scene)
    :setup (lambda (_mode) (etaf-screensaver-benchmark--fixture scene))))
 
 (provide 'etaf-screensaver-performance-scenarios)

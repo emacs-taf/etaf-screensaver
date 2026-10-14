@@ -1,15 +1,111 @@
 # etaf-screensaver manual
 
-This manual documents the scene interface: the spec format, the expression
-language, every built-in layer and the two extension points. The public API
-list lives in `etaf-screensaver.el`; this document explains how to use it.
+This manual explains idle presentation, Lisp playback configuration and scene
+authoring. The supported API inventory lives in `etaf-screensaver.el`.
+
+## Automatic presentation and waking
+
+```elisp
+(require 'etaf-screensaver)
+(setq etaf-screensaver-idle-delay 300)
+(etaf-screensaver-mode 1)
+```
+
+After the idle interval, the selected Emacs frame shows only animation.
+Automatic activation waits while the minibuffer is active or the frame is
+hidden or unfocused. It never raises a frame or starts a child process.
+`etaf-screensaver-start` starts the same presentation manually; an optional
+program argument overrides configuration for that presentation only.
+
+A key, mouse movement, completed click or wheel event restores the saved
+windows and buffer positions. The wake event is consumed, not replayed into
+an editor or another application's controls. A click dismisses on release;
+its button-down event is consumed first. Stopping removes the animation timer,
+transient input map, wake hooks, mouse-tracking change, Runtime and ephemeral
+buffer. Repeated start does not overwrite the original window snapshot, and
+repeated stop is harmless. Killing the presentation buffer also cleans up.
+This is not a security lock and does not protect unattended sensitive data.
+
+Automatic mode retains one idle watcher and a post-command rearming hook.
+After dismissal it waits a fresh interval, including a mouse-only wake that
+did not reset Emacs's native idle clock. `(etaf-screensaver-mode -1)` dismisses
+any active presentation and releases the watcher and hook too. Re-enabling
+replaces the watcher rather than accumulating timers; do this after changing
+`etaf-screensaver-idle-delay` if the new delay should take effect immediately.
+
+## Composing playback
+
+A program is a scene symbol, a configured scene item, or a group containing
+more programs. The root repeats after each finite round.
+
+```elisp
+;; One animation, recreated after its duration.
+(setq etaf-screensaver-program 'donut)
+
+;; One ordered sequence.
+(setq etaf-screensaver-program
+      '(:order sequential :scenes (matrix starfield snow)))
+
+;; Every scene once, in a newly shuffled order each round.
+(setq etaf-screensaver-program
+      '(:order shuffle :scenes (matrix starfield snow donut plasma)))
+
+;; Choose groups randomly, but play the first group's sequence in order.
+(setq etaf-screensaver-program
+      '(:order random :count 2
+        :scenes ((:order sequential :scenes (matrix starfield))
+                 (:order shuffle :scenes (snow plasma donut)))))
+```
+
+Groups take `:order`, a nonempty `:scenes` list and an optional positive
+`:count` (default: child count). Sequential order wraps through children;
+shuffle draws without replacement within each bag and creates another bag
+if count exceeds child count; random samples with replacement. Thus random
+can repeat a scene or group, whereas shuffle covers every child in a bag.
+Nested groups remain contiguous; the parent chooses a whole child program,
+not individual scenes flattened out of it.
+
+Scene items specify `:scene`, optional positive `:duration` seconds,
+`:frame-rate` and a `:params` alist. Defaults can be shared per scene:
+
+```elisp
+(setq etaf-screensaver-scene-duration 30
+      etaf-screensaver-max-frame-rate 30
+      etaf-screensaver-scene-options
+      '((matrix :duration 20 :params ((speed . 4)))
+        (donut :params ((speed . 6) (detail . normal))))
+(setq etaf-screensaver-program
+      '(:order sequential
+        :scenes ((:scene matrix :duration 10 :params ((speed . 7)))
+                 donut)))
+```
+
+Item values override per-scene defaults, which override the scene's parameters
+and frame rate or the global default duration. Parameter alists merge by key;
+symbol and keyword forms address the same parameter. The global frame-rate cap
+always applies. It is a ceiling, not a promise of physical refresh frequency.
+A duration must be at most one day, frame rates at most 120, group child/count
+values at most 1000, nesting at most 16 and an expanded round at most 10000
+nodes. These bounds keep erroneous configurations from blocking the editor.
+
+`etaf-screensaver-seed` is nil by default, giving each presentation a new seed.
+An integer reproduces the program choices and initial scene states. Later
+frames depend on elapsed time and viewport dimensions as well. Configuration
+is validated and snapshotted at start; edit it outside the screen, then stop
+and start to apply it. `etaf-screensaver-status` reports the active item,
+effective parameters and remaining scenes without showing an on-screen HUD.
+
+Invalid configuration fails before window takeover. A callback or rendering
+failure tears down the presentation, reports its cause and disables automatic
+mode to prevent repeated idle errors. Correct the configuration or scene,
+then enable the mode again.
 
 ## Concepts
 
 A **scene** is a pure generative program registered under an identifier. It
 builds a state, advances it by one frame and projects it into canvas rows. The
-workspace owns one session per buffer: the clock, the seed, the parameter refs
-and the frame publication.
+presentation owns one session: the clock, seed, parameter values and frame
+publication. It creates no extra frame and changes no user buffer contents.
 
 A **spec** is inert data describing a scene: a title, parameters and a stack of
 **layers**. Each layer names a registered **kind** and its properties. The DSL
@@ -32,7 +128,7 @@ A spec is a plist; a `.esc` file wraps it in `(etaf-scene ...)`. Keys:
 | `:summary` | no | one-line description |
 | `:tags` | no | list of symbols for grouping |
 | `:frame-rate` | no | preferred frames per second (default 15) |
-| `:background` | no | canvas color; defaults to the workspace canvas token |
+| `:background` | no | canvas color; defaults to `etaf-screensaver-background` |
 | `:params` | no | parameter descriptors (see below) |
 | `:layers` | yes | nonempty list of layers, drawn back to front |
 
@@ -53,9 +149,10 @@ Each descriptor is a plist:
 | `:step` | number | positive integer alignment (default 1) |
 | `:options` | choice | alist of unique keys to nonempty labels |
 
-Parameters appear in the workspace's panel as a Slider, Segmented selector or
-Switch. A parameter is addressed by its key symbol in expressions, and Lisp
-callers may also use the equivalent keyword (`:speed` or `speed`).
+Parameters are configured through `etaf-screensaver-scene-options` or program
+items, never through an in-screen control. A parameter is addressed by its key
+symbol in expressions; Lisp configuration may use the equivalent keyword
+(`:speed` or `speed`).
 
 ### Context
 
@@ -107,8 +204,8 @@ a global.
 
 Comparisons are variadic: `(< a b c)` is true when the sequence increases.
 Random expressions use the session's seeded generator during creation, steps,
-rendering, resize and pointer handling. Resetting the seed replays the same
-sequence when the viewport, parameters and subsequent actions are unchanged.
+rendering and resize. Starting with the same seed replays the same sequence
+when the viewport, parameters and elapsed-time steps are unchanged.
 
 ## Layers
 
@@ -142,16 +239,14 @@ One driven drop per column with a visible tail.
 
 ### `sand`
 
-Falling materials with declarative movement, plus optional rain and mouse
-painting. The layer is interactive: dragging on the canvas stamps the brush.
+Falling materials with declarative movement and optional continuous emission.
+Mouse input dismisses the screensaver; there is no painting mode.
 
 | Property | Meaning |
 | --- | --- |
 | `:materials` | nonempty list of material plists (see below) |
 | `:rain` | grains emitted at the top per step (default 0) |
 | `:rain-material` | material key the rain uses (default the first one) |
-| `:brush` | current material key; any other value erases |
-| `:brush-size` | odd cell count of the square brush (default 1) |
 
 A material plist holds `:key`, `:char`, optional `:color`, `:moves` (an
 ordered list of `down`, `down-left`, `down-right`, `left`, `right`, `up`,
@@ -235,8 +330,8 @@ live in `lisp/scenes`; the default user directory is
 - `etaf-screensaver-load-scenes` loads every configured directory and returns
   how many files loaded; a file that fails to read or validate reports and is
   skipped while the rest still load.
-- `etaf-screensaver-reload-scenes` reloads the files and rebuilds the mounted
-  scene in place, so an edited spec appears without switching away.
+- Call the loader outside presentation after editing files, then start a new
+  presentation to use the updated registrations.
 - `etaf-screensaver-register-scene` registers a spec programmatically.
 
 ## Code scenes
@@ -258,37 +353,24 @@ A scene that outgrows the DSL registers ordinary callbacks with
             (list (format "count=%d" (plist-get state :count)))))
 ```
 
-The callbacks are `:create`, `:step`, `:render` and the optional `:resize`
-(return a state that fits a resized canvas) and `:pointer` (receives
-`(:phase start|move|end :row ROW :column COLUMN :event EVENT)`; return non-nil
-to repaint immediately).
-
-## Adding a layer kind
-
-Layer kinds are registered in the DSL:
-
-```elisp
-(etaf-screensaver--define-layer-kind 'my-kind
-  :validate (lambda (layer) ...)
-  :create (lambda (layer context) ...)
-  :step (lambda (layer state context) ...)
-  :draw (lambda (layer state context canvas) ...)
-  :resize (lambda (layer state context) ...) ; optional
-  :pointer (lambda (layer state context event) ...)) ; optional
-```
-
-`draw` writes cells through `etaf-screensaver--canvas-draw`; the canvas merges
-colors and handles wide characters. Build with `make check` as usual.
+The callbacks are `:create`, `:step`, `:render` and optional `:resize`, which
+returns state fitting a resized canvas. They must be pure apart from their
+own scene state: no I/O, processes, timers, buffers or editor changes. All
+input belongs to the screensaver lifecycle and dismisses it. Use data specs
+for ordinary scenes; callbacks are the escape hatch for algorithms the spec
+language cannot express.
 
 ## Performance notes
 
-- A monochrome full-canvas frame publishes in a few milliseconds; per-cell
-  colors cost roughly proportionally to the number of color runs. Quantize
-  palettes and merge runs.
-- High-frequency scenes should cap themselves: `:frame-rate` is the scene's
-  own budget. The workspace pauses stepping while its buffer is not visible.
+- Quantize palettes and merge adjacent color runs; arbitrary per-cell colors
+  cost more to publish than coherent runs.
+- Use `:frame-rate` and the global cap to bound refresh work. Playback stops
+  and cleans up if its buffer/window disappears; no hidden animation probe
+  remains running.
 - Keep particle counts and field resolutions modest; `:block` in a field or a
-  coarse ramp is the cheap way to trade detail for speed.
-- The canvas and HUD hosts are updated through ETAF's retained boundary, so a
-  frame never re-renders the application; structural changes (cinema mode, the
-  parameter panel, scene switching, a resize) re-render once.
+  coarse ramp trades detail for computation time.
+- Frame content uses ETAF's retained Host boundary. Scene switches and resize
+  change the view; ordinary frames update only the canvas content.
+- The maintained performance scenarios time the next autonomous frame, including
+  its timer wait and publication. Background measurements do not certify
+  physical input latency or foreground automatic activation.
