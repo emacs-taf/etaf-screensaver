@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-ink-print :title "Terminal Text Effects: print" :summary "print (Terminal Text Effects) text recording, 80×24, 114 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "ink-print.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 114 :source "print" :license "MIT" :background "#F4F1EA")

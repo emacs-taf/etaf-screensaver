@@ -100,6 +100,50 @@ failure tears down the presentation, reports its cause and disables automatic
 mode to prevent repeated idle errors. Correct the configuration or scene,
 then enable the mode again.
 
+## Style packs and playback strategies
+
+A style pack is a named list of scenes that share one visual language, with
+defaults applied to every scene in it:
+
+```elisp
+;; Bundled: neon, space, ink (light), ember.  Add your own any time.
+(add-to-list 'etaf-screensaver-packs
+             '(flow :title "Flow" :theme dark :background "#000000"
+                    :scenes (frames-royal)))
+```
+
+A pack entry takes :title, :summary, :theme (dark or light), :order,
+:background, :duration, :frame-rate, :params and :scenes.  Background gives a
+pack its paper: the light `ink` pack paints cream behind dark-ink recordings.
+
+`etaf-screensaver-program` accepts `(:pack NAME)` items, so the playback
+strategy is configurable without touching the scenes:
+
+```elisp
+;; One pack from end to end.
+(setq etaf-screensaver-program '(:pack ink))
+
+;; Rotate whole packs; each pack finishes before the next starts.
+(setq etaf-screensaver-program
+      '(:order sequential :scenes ((:pack neon) (:pack space) (:pack ink))))
+
+;; Hold one style for six works, then move on.
+(setq etaf-screensaver-program
+      '(:order sequential :scenes ((:pack neon :count 6) (:pack ink :count 4))))
+
+;; A single work on loop; the root repeats whatever it is given.
+(setq etaf-screensaver-program '(:scene tte-ink-waves))
+
+;; Two packs in a shuffled bag, then the ember pack.
+(setq etaf-screensaver-program
+      '(:order shuffle :scenes ((:pack neon) (:pack ember))))
+```
+
+Pack items accept :order, :count, :duration, :frame-rate, :background and
+:params overrides.  A recorded work registers its recorded length as its
+natural :duration, so `(:pack ink)` plays each recording once instead of
+cutting it mid-loop; set `:duration` explicitly to loop a work instead.
+
 ## Concepts
 
 A **scene** is a pure generative program registered under an identifier. It
@@ -394,6 +438,12 @@ An `.esr` file is ordinary Lisp data and may be written by hand:
 ```
 
 A relative `:recording` resolves against the directory of the `.esr` file.
+Recordings usually end with the resolved text sitting still; run
+`scripts/trim-recording.py animation.tterec` (needs `terminaltexteffects`)
+to keep the moving part plus a short hold and drop the rest, then import the
+trimmed file.  A trimmed work loops its motion instead of freezing, and a
+reel that knows its frame count registers that length as its natural
+duration so a program plays it once before moving on.
 `lisp/reels` ships three recordings produced with Terminal Text Effects 0.15.0
 (commit 6dbc34a0, MIT) from the text `ETAF`: the beams, synthgrid and
 thunderstorm effects, which is why the default program includes `tte-beams`,

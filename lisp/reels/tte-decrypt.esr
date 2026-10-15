@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-decrypt :title "Terminal Text Effects: decrypt" :summary "decrypt (Terminal Text Effects) text recording, 80×24, 467 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "decrypt.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 467 :source "decrypt" :license "MIT")

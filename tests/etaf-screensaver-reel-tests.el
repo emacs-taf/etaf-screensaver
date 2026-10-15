@@ -339,5 +339,20 @@
             (should-not (file-exists-p target)))
         (delete-directory directory t)))))
 
+(ert-deftest etaf-screensaver-reel-tests-natural-duration ()
+  "A reel with frame count and rate registers its full length as duration."
+  (etaf-screensaver-reel-tests--clean
+    (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
+      (etaf-screensaver-register-reel
+       (list :id 'reel-test-natural :provider 'frames :recording manifest
+             :frame-rate 10 :frame-count 2 :title "Natural"))
+      (etaf-screensaver-start '(:order sequential :scenes (reel-test-natural matrix)))
+      (let ((deadline (+ (float-time) 3)))
+        (while (and (< (float-time) deadline)
+                    (eq (plist-get (etaf-screensaver-status) :scene) 'reel-test-natural))
+          (sleep-for 0.02)))
+      (should (eq (plist-get (etaf-screensaver-status) :scene) 'matrix))
+      (etaf-screensaver-stop))))
+
 (provide 'etaf-screensaver-reel-tests)
 ;;; etaf-screensaver-reel-tests.el ends here

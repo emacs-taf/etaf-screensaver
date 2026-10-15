@@ -16,6 +16,14 @@
   centers them and recycles decoded frames. `scripts/bake-canvas-frames.mjs`
   bakes Butterchurn/MilkDrop presets or any page canvas into a bundle.
   Baked bundles stay out of version control.
+- Style packs and strategies: `etaf-screensaver-packs` groups scenes into a
+  shared visual language (neon, space, ink, ember) and programs accept
+  `(:pack NAME)` items, so a round can hold one pack, rotate whole packs,
+  loop a single work or mix packs deliberately.  Recorded works register
+  their recorded length as the scene duration and no longer get cut
+  mid-loop.  Fourteen Terminal Text Effects recordings ship in `lisp/reels`,
+  including a light-paper `ink` pack; `scripts/trim-recording.py` drops the
+  still tail of a recording before import.
 
 ### Changed
 

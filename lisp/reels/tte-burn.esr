@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-burn :title "Terminal Text Effects: burn" :summary "burn (Terminal Text Effects) text recording, 80×24, 224 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "burn.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 224 :source "burn" :license "MIT")

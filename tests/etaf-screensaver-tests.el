@@ -185,7 +185,10 @@
   "All bundled scenes publish autonomous frames without a control surface."
   (etaf-screensaver-tests--clean
     (dolist (scene '(banner donut falling-sand life matrix plasma quotes snow starfield
-                          tte-beams tte-synthgrid tte-thunderstorm))
+                          tte-beams tte-synthgrid tte-thunderstorm tte-decrypt
+                          tte-fireworks tte-bubbles tte-unstable tte-blackhole
+                          tte-rain tte-vhstape tte-burn tte-ink-waves
+                          tte-ink-spotlights tte-ink-print))
       (ert-info ((format "Scene: %s" scene))
         (let ((buffer (etaf-screensaver-start scene)))
           (let ((deadline (+ (float-time) 1)))
@@ -212,6 +215,29 @@
       (should (eq (plist-get status :scene) 'banner))
       (should (> (or (plist-get status :elapsed) 0) 1.0)))
     (etaf-screensaver-stop)))
+
+(ert-deftest etaf-screensaver-tests-packs-play-as-configured ()
+  "Pack items play their scenes, honor counts and reject unknown packs."
+  (etaf-screensaver-tests--clean
+    (add-to-list 'etaf-screensaver-packs
+                 '(test-pack :title "Test" :order sequential :background "#101820"
+                             :scenes (matrix snow)))
+    (unwind-protect
+        (progn
+          (should-error (etaf-screensaver-start '(:pack missing-pack))
+                        :type 'etaf-screensaver-error)
+          (etaf-screensaver-start '(:pack test-pack))
+          (let ((status (etaf-screensaver-status)))
+            (should (eq (plist-get status :scene) 'matrix))
+            (should (equal (plist-get status :up-next) '(snow))))
+          (etaf-screensaver-stop)
+          ;; COUNT keeps the round inside the pack, wrapping its scenes.
+          (etaf-screensaver-start '(:pack test-pack :count 3))
+          (let ((status (etaf-screensaver-status)))
+            (should (eq (plist-get status :scene) 'matrix))
+            (should (equal (plist-get status :up-next) '(snow matrix))))
+          (etaf-screensaver-stop))
+      (setq etaf-screensaver-packs (assq-delete-all 'test-pack etaf-screensaver-packs)))))
 
 (ert-deftest etaf-screensaver-tests-invalid-start-rolls-back ()
   "Invalid configuration or a scene error leaves no takeover or resources."

@@ -75,7 +75,7 @@ disturbing imported reels."
 
 (defconst etaf-screensaver--reel-keys
   '(:id :title :summary :tags :provider :recording :kind :width :height :frame-rate
-    :frame-count :source :license :background)
+    :duration :frame-count :source :license :background)
   "Keys accepted in a reel spec.")
 
 (defconst etaf-screensaver--reel-read-cache-limit 2
@@ -152,6 +152,7 @@ Signal `etaf-screensaver-error' for unknown keys or invalid values."
         (width (plist-get spec :width))
         (height (plist-get spec :height))
         (frame-rate (plist-get spec :frame-rate))
+        (duration (plist-get spec :duration))
         (frame-count (plist-get spec :frame-count))
         (source (plist-get spec :source))
         (license (plist-get spec :license))
@@ -183,6 +184,8 @@ Signal `etaf-screensaver-error' for unknown keys or invalid values."
           (etaf-screensaver--fail "Reel %s %s must be a positive integer" id (car entry)))))
     (unless (or (null frame-rate) (and (numberp frame-rate) (> frame-rate 0)))
       (etaf-screensaver--fail "Reel %s :frame-rate must be a positive number" id))
+    (unless (or (null duration) (and (numberp duration) (> duration 0)))
+      (etaf-screensaver--fail "Reel %s :duration must be a positive number" id))
     (unless (or (null source) (stringp source))
       (etaf-screensaver--fail "Reel %s :source must be a string" id))
     (unless (or (null license) (stringp license))
@@ -448,7 +451,10 @@ timing and centers its fixed canvas; a smaller canvas crops both edges."
            (provider (cdr (assq provider-id etaf-screensaver--reel-providers)))
            (file (etaf-screensaver--reel-file (plist-get reel :recording)))
            (title (or (plist-get reel :title) (file-name-base file)))
-           (rate (or (plist-get reel :frame-rate) 15)))
+           (rate (or (plist-get reel :frame-rate) 15))
+           (duration (or (plist-get reel :duration)
+                         (let ((count (plist-get reel :frame-count)))
+                           (and (integerp count) (> count 0) (/ (float count) rate))))))
       (unless (file-regular-p file)
         (etaf-screensaver--fail "Reel %s recording does not exist: %s" id file))
       (etaf-screensaver--register
@@ -466,6 +472,7 @@ timing and centers its fixed canvas; a smaller canvas crops both edges."
                     (or (plist-get reel :frame-count) 0) rate))
         :tags (append (plist-get reel :tags) (list 'reel provider-id))
         :frame-rate rate
+        :duration duration
         :background (plist-get reel :background)
         :create (lambda (_context) (etaf-screensaver--reel-create reel provider file))
         :step #'etaf-screensaver--reel-step

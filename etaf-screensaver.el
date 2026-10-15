@@ -74,7 +74,10 @@
 ;;;###autoload (autoload 'etaf-screensaver-define-scene "etaf-screensaver" nil nil)
 ;; Register a pure callback scene under ID; replace an existing registration
 ;; in place.  PROPERTIES supplies :create, :step, :render, optional :resize,
-;; :title, :summary, :tags, :frame-rate, :background and :params descriptors.
+;; :title, :summary, :tags, :frame-rate, :duration, :background and :params
+;; descriptors.  :duration is the scene's natural length in seconds; a
+;; program uses it when neither the item nor scene-options give one, so a
+;; recorded work plays once without being cut mid-loop.
 ;; CREATE returns state, STEP mutates it, RENDER returns row strings or a
 ;; newline-separated string, and RESIZE returns resized state.  Each receives
 ;; a context with dimensions, seed, tick, elapsed time, dt and parameter/random
@@ -121,7 +124,10 @@
 ;; A relative :recording resolves against the reel file's directory.  The
 ;; scene reads the recording when it is created, so an unused reel holds only
 ;; metadata; playback follows the recording's own per-frame timing and
-;; centers its fixed canvas, cropping when the window is smaller.  Invalid
+;; centers its fixed canvas, cropping when the window is smaller.  When the
+;; spec carries :frame-count and :frame-rate the reel registers that full
+;; length as its natural :duration, so a program plays the work once instead
+;; of cutting it mid-loop.  Invalid
 ;; specs signal etaf-screensaver-error.  Registering the same :id replaces
 ;; the previous scene in place.
 ;;
@@ -154,11 +160,22 @@
 ;; Re-enable the mode after changing it to re-arm immediately.
 ;;
 ;; Variable: etaf-screensaver-program
-;; Repeating program: a scene symbol, a scene item plist, or a nested group.
-;; An item has :scene and optional :duration, :frame-rate and :params alist.
-;; A group has :order sequential/shuffle/random, :scenes children and optional
-;; :count selections (default child count).  Shuffle draws without replacement
-;; within each bag; random allows repeats.  Groups nest to select sequences.
+;; Repeating program: a scene symbol, a scene item plist, a pack item or a
+;; nested group.  An item has :scene and optional :duration, :frame-rate,
+;; :background and :params alist.  A pack item (:pack NAME) plays scenes from
+;; etaf-screensaver-packs and may override the pack's :order, :count and
+;; defaults.  A group has :order sequential/shuffle/random, :scenes children
+;; and optional :count selections (default child count).  Shuffle draws
+;; without replacement within each bag; random allows repeats.  Groups nest
+;; to select sequences, hold one style pack for a number of scenes or rotate
+;; whole packs.
+;;
+;; Variable: etaf-screensaver-packs
+;; Named style packs: alist of (ID :title TITLE :summary SUMMARY :theme
+;; dark|light :order ORDER :background COLOR :duration SECONDS :frame-rate
+;; RATE :params ALIST :scenes (SCENE...)).  Bundled packs cover the shipped
+;; scenes; add your own with `add-to-list' after baking or registering
+;; scenes.  Playing a pack keeps its works in one visual language.
 ;;
 ;; Variable: etaf-screensaver-scene-duration
 ;; Default positive seconds per scene, default 30.  Items override this.

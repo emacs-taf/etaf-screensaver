@@ -8,7 +8,6 @@
  :summary "沙粒不断落下，沿着坡面堆积。"
  :tags (physics)
  :frame-rate 20
- :background "#05070B"
  :params ((:key grains :label "每帧沙粒数" :type number
            :min 1 :max 12 :step 1 :default 3))
  :layers ((:kind sand

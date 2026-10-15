@@ -17,15 +17,21 @@
   :group 'multimedia)
 
 (defcustom etaf-screensaver-program
-  '(:order shuffle :scenes (banner donut falling-sand life matrix plasma quotes snow starfield
-                                   tte-beams tte-synthgrid tte-thunderstorm))
+  '(:order sequential
+    :scenes ((:pack neon :count 4)
+             (:pack space :count 4)
+             (:pack ink :count 3)
+             (:pack ember :count 3)))
   "Playback program, repeated until input dismisses the screensaver.
 A symbol names a scene.  A scene plist holds :scene and optional :duration,
-:frame-rate and :params (an alist).  A group holds :order (sequential,
-shuffle or random), a nonempty :scenes list of programs and optional :count.
-COUNT defaults to the number of children.  Sequential groups wrap in order;
-shuffle groups draw from bags without replacement; random groups allow
-repeats.  Groups can nest, so a group can choose whole animation sequences."
+:frame-rate, :background and :params (an alist).  A `(:pack NAME)' item
+plays scenes from `etaf-screensaver-packs' and accepts :order, :count and the
+same overrides.  A group holds :order (sequential, shuffle or random), a
+nonempty :scenes list of programs and optional :count.  COUNT defaults to the
+number of children.  Sequential groups wrap in order; shuffle groups draw
+from bags without replacement; random groups allow repeats.  Groups can nest,
+so a program can rotate whole style packs, hold one pack for a number of
+scenes, loop a single work, or mix packs deliberately."
   :type 'sexp :group 'etaf-screensaver)
 
 (defcustom etaf-screensaver-scene-duration 30
@@ -99,8 +105,10 @@ Changes take effect at the next start.  Invalid options fail before takeover."
          (scene (etaf-screensaver--scene id))
          (defaults (cdr (assq id etaf-screensaver-scene-options)))
          (item (if (symbolp program) nil program)))
-    (etaf-screensaver--check-plist item '(:scene :duration :frame-rate :params) "Scene item")
+    (etaf-screensaver--check-plist item '(:scene :duration :frame-rate :params :background)
+                                   "Scene item")
     (let ((duration (or (plist-get item :duration) (plist-get defaults :duration)
+                        (etaf-screensaver--scene-duration scene)
                         etaf-screensaver-scene-duration))
           (rate (or (plist-get item :frame-rate) (plist-get defaults :frame-rate)
                     (etaf-screensaver--scene-frame-rate scene))))
@@ -109,10 +117,89 @@ Changes take effect at the next start.  Invalid options fail before takeover."
       (unless (and (numberp rate) (> rate 0) (<= rate 120))
         (etaf-screensaver--fail "Frame rate must be positive and at most 120"))
       (list :scene id :definition scene
-            :background (or (etaf-screensaver--scene-background scene) etaf-screensaver-background)
+            :background (or (plist-get item :background)
+                            (etaf-screensaver--scene-background scene)
+                            etaf-screensaver-background)
             :duration duration :frame-rate (min rate etaf-screensaver-max-frame-rate)
             :params (etaf-screensaver--parameters
                      scene (append (plist-get item :params) (plist-get defaults :params)))))))
+
+(defcustom etaf-screensaver-packs
+  '((neon :title "霓虹合成"
+          :summary "黑底霓虹网格、光束与代码流的合成器风格"
+          :theme dark :order sequential :background "#03050D"
+          :scenes (tte-beams tte-synthgrid tte-decrypt tte-vhstape tte-rain matrix))
+    (space :title "深空"
+           :summary "黑洞、雷电、烟花与星野"
+           :theme dark :order sequential :background "#010207"
+           :scenes (tte-blackhole tte-thunderstorm tte-fireworks tte-unstable starfield))
+    (ink :title "文墨"
+         :summary "米色纸面、深墨字与光影"
+         :theme light :order sequential :background "#F4F1EA"
+         :scenes (tte-ink-spotlights tte-ink-waves tte-ink-print))
+    (ember :title "余烬"
+           :summary "暖色粒子与缓缓落下的沙火"
+           :theme dark :order sequential :background "#0A0503"
+           :scenes (tte-burn tte-bubbles falling-sand)))
+  "Named style packs, each a list of scenes sharing one visual language.
+An entry is (ID :title TITLE :summary SUMMARY :theme dark|light :order ORDER
+:background COLOR :duration SECONDS :frame-rate RATE :params ALIST :scenes
+(SCENE...)).  A program item `(:pack ID)' plays the pack; the pack's :order,
+:background, :duration, :frame-rate and :params are defaults the item may
+override.  Packs keep a screensaver round inside one style; put several pack
+items in one program to rotate styles deliberately.  Bundled packs cover the
+scenes shipped with the application; users can add their own with
+`add-to-list' after baking or registering scenes."
+  :type 'sexp :group 'etaf-screensaver)
+
+(defconst etaf-screensaver--pack-keys
+  '(:title :summary :theme :order :background :duration :frame-rate :params :scenes)
+  "Keys accepted in a scene pack.")
+
+(defun etaf-screensaver--pack (id)
+  "Return pack ID's validated plist, or signal `etaf-screensaver-error'."
+  (let ((pack (cdr (assq id etaf-screensaver-packs))))
+    (unless (and pack (proper-list-p pack))
+      (etaf-screensaver--fail "Unknown scene pack: %s" id))
+    (etaf-screensaver--check-plist pack etaf-screensaver--pack-keys
+                                   (format "Scene pack %s" id))
+    (let ((scenes (plist-get pack :scenes))
+          (order (plist-get pack :order)))
+      (unless (and (proper-list-p scenes) scenes (cl-every #'symbolp scenes))
+        (etaf-screensaver--fail "Scene pack %s needs a list of scene symbols" id))
+      (unless (or (null order) (memq order '(sequential shuffle random)))
+        (etaf-screensaver--fail "Scene pack %s :order must be sequential, shuffle or random" id)))
+    pack))
+
+(defun etaf-screensaver--compile-pack (program depth)
+  "Expand the `:pack' PROGRAM at nesting DEPTH into validated scene items.
+The pack's defaults apply to every item; the program item overrides them."
+  (when (> depth 16)
+    (etaf-screensaver--fail "Playback groups are nested too deeply"))
+  (etaf-screensaver--check-plist program '(:pack :order :count :duration :frame-rate
+                                                  :params :background)
+                                 "Pack item")
+  (let* ((id (plist-get program :pack))
+         (pack (etaf-screensaver--pack id))
+         (scenes (plist-get pack :scenes))
+         (order (or (plist-get program :order) (plist-get pack :order) 'sequential))
+         (count (or (plist-get program :count) (length scenes))))
+    (unless (memq order '(sequential shuffle random))
+      (etaf-screensaver--fail "Pack order must be sequential, shuffle or random"))
+    (unless (and (integerp count) (<= 1 count 1000))
+      (etaf-screensaver--fail "A pack needs 1..1000 selections"))
+    (list :order order :count count
+          :scenes
+          (mapcar
+           (lambda (scene)
+             (let ((item (list :scene scene)))
+               (dolist (key '(:duration :frame-rate :background))
+                 (let ((value (or (plist-get program key) (plist-get pack key))))
+                   (when value (setq item (plist-put item key value)))))
+               (let ((params (append (plist-get program :params) (plist-get pack :params))))
+                 (when params (setq item (plist-put item :params params))))
+               (etaf-screensaver--program-item item)))
+           scenes))))
 
 (defun etaf-screensaver--compile-program (program &optional depth)
   "Validate PROGRAM, at nesting DEPTH, into a bounded finite tree."
@@ -120,8 +207,12 @@ Changes take effect at the next start.  Invalid options fail before takeover."
     (etaf-screensaver--fail "Playback groups are nested too deeply"))
   (unless (or (symbolp program) (proper-list-p program))
     (etaf-screensaver--fail "A program must be a scene symbol or plist"))
-  (if (or (symbolp program) (plist-member program :scene))
-      (etaf-screensaver--program-item program)
+  (cond
+   ((or (symbolp program) (plist-member program :scene))
+    (etaf-screensaver--program-item program))
+   ((plist-member program :pack)
+    (etaf-screensaver--compile-pack program (or depth 0)))
+   (t
     (etaf-screensaver--check-plist program '(:order :scenes :count) "Playback group")
     (let ((order (plist-get program :order))
           (scenes (plist-get program :scenes)))
@@ -135,7 +226,7 @@ Changes take effect at the next start.  Invalid options fail before takeover."
         (list :order order :count count
               :scenes (mapcar (lambda (child)
                                 (etaf-screensaver--compile-program child (1+ (or depth 0))))
-                              scenes))))))
+                              scenes)))))))
 
 (defun etaf-screensaver--validate-options ()
   "Validate global playback settings before changing any windows."
@@ -146,6 +237,11 @@ Changes take effect at the next start.  Invalid options fail before takeover."
     (etaf-screensaver--fail "Seed must be an integer or nil"))
   (unless (proper-list-p etaf-screensaver-scene-options)
     (etaf-screensaver--fail "Scene options must be an alist"))
+  (unless (proper-list-p etaf-screensaver-packs)
+    (etaf-screensaver--fail "Scene packs must be an alist"))
+  (dolist (entry etaf-screensaver-packs)
+    (unless (and (consp entry) (symbolp (car entry)))
+      (etaf-screensaver--fail "Invalid scene pack entry")))
   (dolist (entry etaf-screensaver-scene-options)
     (unless (and (consp entry) (symbolp (car entry)))
       (etaf-screensaver--fail "Invalid scene options entry"))

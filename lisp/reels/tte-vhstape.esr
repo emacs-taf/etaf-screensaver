@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-vhstape :title "Terminal Text Effects: vhstape" :summary "vhstape (Terminal Text Effects) text recording, 80×24, 681 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "vhstape.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 681 :source "vhstape" :license "MIT")

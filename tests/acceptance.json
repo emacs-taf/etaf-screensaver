@@ -13,6 +13,7 @@
     {"name": "etaf-screensaver-tests-unicode-and-seeded-particles", "file": "tests/etaf-screensaver-tests.el", "purpose": "Canvas-only output preserves mixed Unicode text, color and repeatable particle initialization."},
     {"name": "etaf-screensaver-tests-bundled-scenes-run", "file": "tests/etaf-screensaver-tests.el", "purpose": "Every bundled scene renders and advances autonomously without workspace controls."},
     {"name": "etaf-screensaver-tests-banner-rotates-effects", "file": "tests/etaf-screensaver-tests.el", "purpose": "A long-running banner rotates its effect and colour without failing."},
+    {"name": "etaf-screensaver-tests-packs-play-as-configured", "file": "tests/etaf-screensaver-tests.el", "purpose": "Pack items play their scenes in order, honor counts and reject unknown packs."},
     {"name": "etaf-screensaver-tests-invalid-start-rolls-back", "file": "tests/etaf-screensaver-tests.el", "purpose": "Bad configuration and scene failures leave the editor and resource inventory unchanged."},
     {"name": "etaf-screensaver-tests-external-buffer-kill-cleans-up", "file": "tests/etaf-screensaver-tests.el", "purpose": "Externally killing the presentation buffer restores windows and cancels animation."},
     {"name": "etaf-screensaver-tests-loader-and-catalog", "file": "tests/etaf-screensaver-tests.el", "purpose": "Scene files replace registrations while a malformed file reports independently."},
@@ -22,6 +23,7 @@
     {"name": "etaf-screensaver-reel-tests-batch-report-classifies-files", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Batch import reports compatible, unrecognized and invalid recordings separately."},
     {"name": "etaf-screensaver-reel-tests-rejects-invalid-recordings", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Wrong versions, truncated streams and invalid frames signal errors and write nothing."},
     {"name": "etaf-screensaver-reel-tests-loader-skips-broken-reels", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel spec with a missing recording is reported and skipped without disturbing other scenes."},
+    {"name": "etaf-screensaver-reel-tests-natural-duration", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel with a recorded length uses it as the scene duration instead of the default."},
     {"name": "etaf-screensaver-reel-tests-image-frames-advance", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Baked image frames publish display slices that advance in order."},
     {"name": "etaf-screensaver-reel-tests-imports-frame-bundle", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Importing a frame bundle copies every file, writes the reel spec and plays it."},
     {"name": "etaf-screensaver-reel-tests-rejects-broken-frame-bundles", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Missing frames, non-images and bad JSON signal and write nothing."}

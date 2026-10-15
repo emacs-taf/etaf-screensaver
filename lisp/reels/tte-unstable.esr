@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-unstable :title "Terminal Text Effects: unstable" :summary "unstable (Terminal Text Effects) text recording, 80×24, 248 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "unstable.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 248 :source "unstable" :license "MIT")

@@ -1,2 +1,2 @@
 ;;; -*- lisp-data -*-
-(:id tte-thunderstorm :title "Terminal Text Effects: thunderstorm" :summary "thunderstorm (Terminal Text Effects) recording, 80×24, 480 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "thunderstorm.tterec" :width 80 :height 24 :frame-rate 20 :frame-count 480 :source "thunderstorm" :license "MIT")
+(:id tte-thunderstorm :title "Terminal Text Effects: thunderstorm" :summary "thunderstorm (Terminal Text Effects) text recording, 80×24, 480 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "thunderstorm.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 480 :source "thunderstorm" :license "MIT")

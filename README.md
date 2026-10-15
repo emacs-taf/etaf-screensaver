@@ -54,14 +54,16 @@ Groups support `sequential`, `shuffle` (each child once per bag) and `random`
         (donut :duration 40 :params ((speed . 4) (detail . fine)))))
 ```
 
-The default program shuffles twelve bundled scenes: banner, donut,
-falling-sand, life, matrix, plasma, quotes, snow and starfield plus the
-recorded reels tte-beams, tte-synthgrid and tte-thunderstorm.
-See the [manual](docs/manual.md) for program composition, durations, frame-rate
-caps, repeatable seeds, custom scene files, recorded-animation import and
-callback authoring. Recordings can be text (Terminal Text Effects) or baked
-images (MilkDrop via butterchurn, shader or sketch previews); the manual
-explains how to bake a bundle without putting it in version control.
+The default program rotates four bundled style packs — neon (mesh, beams and
+code flow), space (black holes, lightning, fireworks), ink (dark text on a
+cream page) and ember (warm particles and falling sand) — and each recorded
+work plays its full length before the next one starts.
+See the [manual](docs/manual.md) for program composition, style packs,
+durations, frame-rate caps, repeatable seeds, custom scene files,
+recorded-animation import and callback authoring. Recordings can be text
+(Terminal Text Effects) or baked images (MilkDrop via butterchurn, shader or
+sketch previews); the manual explains how to bake and trim a bundle without
+putting it in version control.
 The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 
 ## Development

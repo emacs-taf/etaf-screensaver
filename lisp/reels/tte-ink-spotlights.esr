@@ -1,0 +1,2 @@
+;;; -*- lisp-data -*-
+(:id tte-ink-spotlights :title "Terminal Text Effects: spotlights" :summary "spotlights (Terminal Text Effects) text recording, 80×24, 628 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "ink-spotlights.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 628 :source "spotlights" :license "MIT" :background "#F4F1EA")

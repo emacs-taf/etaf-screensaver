@@ -20,7 +20,7 @@
 (define-error 'etaf-screensaver-error "ETAF screensaver error")
 
 (defconst etaf-screensaver--scene-keys
-  '(:title :summary :tags :frame-rate :background :params
+  '(:title :summary :tags :frame-rate :duration :background :params
     :create :step :render :resize)
   "Property keys accepted by `etaf-screensaver-define-scene'.")
 
@@ -28,9 +28,11 @@
   "Registered description of one generative scene.
 ID is the registration symbol; TITLE and SUMMARY are display strings; TAGS is
 a list of symbols; FRAME-RATE is the scene's preferred frames per second;
-BACKGROUND overrides the canvas color; PARAMS is a list of validated parameter
+DURATION is the scene's natural length in seconds when it has one (a recorded
+reel), so a program can play it once without cutting it mid-loop; BACKGROUND
+overrides the canvas color; PARAMS is a list of validated parameter
 descriptors; CREATE, STEP, RENDER and RESIZE are the scene callbacks."
-  id title summary tags frame-rate background params create step render resize)
+  id title summary tags frame-rate duration background params create step render resize)
 
 (defvar etaf-screensaver--scenes nil
   "Registered scenes in display order, as (ID . SCENE) pairs.")
@@ -129,6 +131,7 @@ the description in place, keeping display order."
         (summary (plist-get properties :summary))
         (tags (plist-get properties :tags))
         (frame-rate (or (plist-get properties :frame-rate) 15))
+        (duration (plist-get properties :duration))
         (params (plist-get properties :params)))
     (unless (or (null title) (and (stringp title) (not (equal title ""))))
       (etaf-screensaver--fail "Scene %s :title must be a nonempty string" id))
@@ -138,6 +141,8 @@ the description in place, keeping display order."
       (etaf-screensaver--fail "Scene %s :tags must be a list" id))
     (unless (and (numberp frame-rate) (> frame-rate 0))
       (etaf-screensaver--fail "Scene %s :frame-rate must be a positive number" id))
+    (unless (or (null duration) (and (numberp duration) (> duration 0)))
+      (etaf-screensaver--fail "Scene %s :duration must be a positive number" id))
     (unless (or (null params) (proper-list-p params))
       (etaf-screensaver--fail "Scene %s :params must be a list" id))
     (let* ((scene (etaf-screensaver--scene-make
@@ -146,6 +151,7 @@ the description in place, keeping display order."
                    :summary (or summary "")
                    :tags tags
                    :frame-rate frame-rate
+                   :duration duration
                    :background (plist-get properties :background)
                    :params (mapcar (lambda (param)
                                      (etaf-screensaver--param-validate param id))
