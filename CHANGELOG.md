@@ -11,6 +11,11 @@
   files with dimensions, color depths and license. Three recorded reels ship
   in `lisp/reels` and join the default program. Other tools can register a
   reader through `etaf-screensaver-define-reel-provider`.
+- Image-frame reels: the built-in `frames` provider reads a JSON manifest
+  plus baked stills; the canvas scales and slices them per character row,
+  centers them and recycles decoded frames. `scripts/bake-canvas-frames.mjs`
+  bakes Butterchurn/MilkDrop presets or any page canvas into a bundle.
+  Baked bundles stay out of version control.
 
 ### Changed
 

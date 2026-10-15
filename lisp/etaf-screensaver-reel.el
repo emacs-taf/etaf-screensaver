@@ -27,10 +27,14 @@
 :TITLE and :LICENSE are display strings.  :EXTENSIONS lists file name
 suffixes without a leading dot for batch import.  :MATCH takes a file path
 and returns non-nil when the provider recognizes it.  :READ takes a file
-path and returns a plist with :width and :height (positive integers),
-:frame-rate (positive number), :frames (a nonempty vector of frame strings)
-and optional :durations (seconds per frame), :ansi (frame text carries SGR
-runs) and :source (a short display description).")
+path and returns a plist with :frame-rate (positive number), :frames (a
+nonempty vector of text frame strings) or :image-frames (a nonempty vector
+of image file names), :width and :height (positive cell dimensions, text
+frames) or :image-size (a (WIDTH . HEIGHT) pixel pair, optional for image
+frames), plus optional :durations (seconds per frame), :ansi (frame text
+carries SGR runs), :source (a short display description), :license (the
+recording's own licence), :assets (every file that belongs to the
+recording, for import) and :colors/:attributes.")
 
 (defvar etaf-screensaver--reel-providers nil
   "Registered reel providers as (ID . PLIST) pairs.")
@@ -70,7 +74,7 @@ disturbing imported reels."
   id)
 
 (defconst etaf-screensaver--reel-keys
-  '(:id :title :summary :tags :provider :recording :width :height :frame-rate
+  '(:id :title :summary :tags :provider :recording :kind :width :height :frame-rate
     :frame-count :source :license :background)
   "Keys accepted in a reel spec.")
 
@@ -144,6 +148,7 @@ Signal `etaf-screensaver-error' for unknown keys or invalid values."
         (tags (plist-get spec :tags))
         (provider (plist-get spec :provider))
         (recording (plist-get spec :recording))
+        (kind (plist-get spec :kind))
         (width (plist-get spec :width))
         (height (plist-get spec :height))
         (frame-rate (plist-get spec :frame-rate))
@@ -159,6 +164,8 @@ Signal `etaf-screensaver-error' for unknown keys or invalid values."
       (etaf-screensaver--fail "Reel %s uses an unknown provider: %s" id provider))
     (unless (and (stringp recording) (not (equal recording "")))
       (etaf-screensaver--fail "Reel %s needs a nonempty :recording file name" id))
+    (unless (or (null kind) (memq kind '(text image)))
+      (etaf-screensaver--fail "Reel %s :kind must be text or image" id))
     (unless (or (null title) (and (stringp title) (not (equal title ""))))
       (etaf-screensaver--fail "Reel %s :title must be a nonempty string" id))
     (unless (or (null summary) (stringp summary))
@@ -260,8 +267,72 @@ half, so the result always occupies exactly WIDTH display cells."
         (push (etaf-screensaver--reel-run run run-face) parts))
       (apply #'concat (nreverse parts)))))
 
-(defun etaf-screensaver--reel-render (state context)
-  "Return STATE's current frame fitted into CONTEXT's canvas.
+(defun etaf-screensaver--reel-image-size (state index)
+  "Return image frame INDEX's native pixel size from STATE.
+The provider may declare :image-size for a uniform recording; otherwise the
+size is read from the first frame that needs it and cached."
+  (or (plist-get state :image-size)
+      (aref (plist-get state :image-sizes) index)
+      (let* ((file (aref (plist-get state :image-frames) index))
+             (spec (condition-case nil (create-image file nil nil) (error nil)))
+             (size (and spec (ignore-errors (image-size spec t)))))
+        (unless (and (consp size) (integerp (car size)) (integerp (cdr size))
+                     (> (car size) 0) (> (cdr size) 0))
+          (etaf-screensaver--fail "Reel image frame is not readable: %s" file))
+        (aset (plist-get state :image-sizes) index size)
+        size)))
+
+(defun etaf-screensaver--reel-image-rows (state context)
+  "Return STATE's current image frame as centered canvas rows.
+The image is scaled to fit inside the canvas, centered both ways and cropped
+per character row with a display slice, so it occupies its own rows without
+moving the layout around it."
+  (let* ((index (plist-get state :index))
+         (file (aref (plist-get state :image-frames) index))
+         (native (etaf-screensaver--reel-image-size state index))
+         (metrics (plist-get context :metrics))
+         (char-width (max 1 (or (plist-get metrics :char-width) (frame-char-width))))
+         (line-height (max 1 (or (plist-get metrics :line-height) (frame-char-height))))
+         (ascent (or (plist-get metrics :ascent) 82))
+         (columns (max 1 (plist-get context :columns)))
+         (rows (max 1 (plist-get context :rows)))
+         (canvas-width (* columns char-width))
+         (canvas-height (* rows line-height))
+         (source-width (max 1 (car native)))
+         (source-height (max 1 (cdr native)))
+         (fit (min (/ (float canvas-width) source-width)
+                   (/ (float canvas-height) source-height)))
+         ;; Align the displayed frame to whole character rows.  A partial last
+         ;; slice is positioned by its own ascent and bleeds into the line
+         ;; below, and a scale derived from the width can round the displayed
+         ;; height past the aligned value, so derive the scale from the
+         ;; aligned height and let the width follow it.
+         (height (max line-height (* line-height (floor (* source-height fit) line-height))))
+         (scale (/ (float height) source-height))
+         (width (max char-width (round (* source-width scale))))
+         (offset-x (max 0 (/ (- canvas-width width) 2)))
+         (offset-y (max 0 (/ (- canvas-height height) 2)))
+         (pad (min (1- columns) (max 0 (/ offset-x char-width))))
+         (image (condition-case nil
+                    (create-image file nil nil
+                                  :scale scale
+                                  :max-width width :max-height height
+                                  :ascent ascent)
+                  (error (etaf-screensaver--fail
+                          "Reel image frame is not readable: %s" file)))))
+    (cl-loop for row below rows
+             collect
+             (let ((y (- (* row line-height) offset-y)))
+               (if (or (< y 0) (>= y height))
+                   ""
+                 (concat (make-string pad ?\s)
+                         (propertize " " 'display
+                                     (list (list 'slice 0 y width
+                                                 (min line-height (- height y)))
+                                           image))))))))
+
+(defun etaf-screensaver--reel-text-rows (state context)
+  "Return STATE's current text frame fitted into CONTEXT's canvas.
 The frame is centered both ways; a canvas smaller than the recording crops
 both edges and a larger one pads with spaces."
   (let* ((columns (plist-get context :columns))
@@ -287,6 +358,12 @@ both edges and a larger one pads with spaces."
                    (aref (etaf-screensaver--reel-cells entry) (+ first row))
                    crop columns))))
      (make-list (- rows top visible) ""))))
+
+(defun etaf-screensaver--reel-render (state context)
+  "Return STATE's current frame fitted into CONTEXT's canvas."
+  (if (eq (plist-get state :kind) 'image)
+      (etaf-screensaver--reel-image-rows state context)
+    (etaf-screensaver--reel-text-rows state context)))
 
 (defun etaf-screensaver--reel-step (state context)
   "Advance STATE by CONTEXT's elapsed seconds, following frame durations.
@@ -315,25 +392,43 @@ A scene duration shorter than the recording loops it from the start."
                                                file (error-message-string problem))))))
     (let* ((width (plist-get data :width))
            (height (plist-get data :height))
+           (images (plist-get data :image-frames))
            (frames (plist-get data :frames))
-           (count (and (vectorp frames) (length frames)))
+           (count (if (vectorp images) (length images)
+                    (and (vectorp frames) (length frames))))
            (rate (or (plist-get data :frame-rate) (plist-get reel :frame-rate) 15))
            (durations (or (plist-get data :durations)
                           (make-vector (or count 0) (/ 1.0 rate))))
            (id (plist-get reel :id)))
-      (unless (and (integerp width) (<= 1 width 4096)
-                   (integerp height) (<= 1 height 4096))
-        (etaf-screensaver--fail "Reel %s reports an invalid canvas size" id))
-      (unless (and count (> count 0) (cl-every #'stringp frames))
+      (unless (and count (> count 0))
         (etaf-screensaver--fail "Reel %s did not produce any frames" id))
       (unless (and (vectorp durations) (= (length durations) count)
                    (cl-every (lambda (duration)
                                (and (numberp duration) (> duration 0)))
                              durations))
         (etaf-screensaver--fail "Reel %s has invalid frame durations" id))
-      (list :frames frames :durations durations :ansi (plist-get data :ansi)
-            :width width :height height :index 0 :clock 0.0
-            :cache (make-vector count nil)))))
+      (if images
+          (progn
+            (unless (cl-every #'stringp images)
+              (etaf-screensaver--fail "Reel %s reports a non-file image frame" id))
+            (let ((size (plist-get data :image-size)))
+              (when size
+                (unless (and (consp size)
+                             (integerp (car size)) (integerp (cdr size))
+                             (> (car size) 0) (> (cdr size) 0))
+                  (etaf-screensaver--fail "Reel %s reports an invalid image size" id))))
+            (list :kind 'image :image-frames images :image-size (plist-get data :image-size)
+                  :image-sizes (make-vector count nil)
+                  :durations durations :index 0 :clock 0.0))
+        (progn
+          (unless (and (integerp width) (<= 1 width 4096)
+                       (integerp height) (<= 1 height 4096))
+            (etaf-screensaver--fail "Reel %s reports an invalid canvas size" id))
+          (unless (and count (> count 0) (cl-every #'stringp frames))
+            (etaf-screensaver--fail "Reel %s did not produce any frames" id))
+          (list :kind 'text :frames frames :durations durations :ansi (plist-get data :ansi)
+                :width width :height height :index 0 :clock 0.0
+                :cache (make-vector count nil)))))))
 
 (defun etaf-screensaver-register-reel (spec)
   "Register the recorded animation described by SPEC and return the scene.
@@ -362,8 +457,9 @@ timing and centers its fixed canvas; a smaller canvas crops both edges."
         :title title
         :summary
         (or (plist-get reel :summary)
-            (format "%s recording (%s%s); %d frames at %s fps"
-                    provider-id (plist-get provider :title)
+            (format "%s %s recording (%s%s); %d frames at %s fps"
+                    provider-id (if (eq (plist-get reel :kind) 'image) "image" "text")
+                    (plist-get provider :title)
                     (if-let* ((source (plist-get reel :source)))
                         (format ": %s" source)
                       "")

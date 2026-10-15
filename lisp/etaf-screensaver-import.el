@@ -34,13 +34,17 @@
             append (plist-get provider :extensions))
    :test #'equal))
 
+(defun etaf-screensaver--import-label (file)
+  "Return FILE's display base name without a .frames manifest suffix."
+  (replace-regexp-in-string "\\.frames\\'" "" (file-name-base file)))
+
 (defun etaf-screensaver--import-name (provider-id file)
   "Return the reel identifier for FILE imported through PROVIDER-ID."
   (intern (replace-regexp-in-string
            "^-\\|-$" ""
            (concat (symbol-name provider-id) "-"
                    (replace-regexp-in-string
-                    "[^a-z0-9]+" "-" (downcase (file-name-base file)))))))
+                    "[^a-z0-9]+" "-" (downcase (etaf-screensaver--import-label file)))))))
 
 (defun etaf-screensaver--import-directory (destination)
   "Return the directory that receives imported reels.
@@ -51,60 +55,85 @@ DESTINATION overrides the user scene directory; it is created on demand."
     (make-directory directory t)
     directory))
 
-(defun etaf-screensaver--import-summary (provider file source width height
-                                                  frame-count frame-rate license)
+(defun etaf-screensaver--import-summary (provider file data)
   "Return the one-line scene summary for an imported recording."
-  (let ((named (and (stringp source) (not (equal source "")))))
-    (format "%s%s recording, %d×%d, %s frames at %s fps, %s license"
-            (if named source (file-name-base file))
+  (let* ((source (plist-get data :source))
+         (named (and (stringp source) (not (equal source ""))))
+         (images (plist-get data :image-frames))
+         (frames (or images (plist-get data :frames)))
+         (count (and (vectorp frames) (length frames)))
+         (size (if images
+                   (let ((pixels (plist-get data :image-size)))
+                     (if pixels (format ", %d×%d px" (car pixels) (cdr pixels)) ""))
+                 (format ", %d×%d" (or (plist-get data :width) 0)
+                         (or (plist-get data :height) 0))))
+         (license (or (plist-get data :license) (plist-get provider :license))))
+    (format "%s%s %s recording%s, %s frames at %s fps, %s license"
+            (if named source (etaf-screensaver--import-label file))
             (if named (format " (%s)" (plist-get provider :title)) "")
-            width height frame-count frame-rate license)))
+            (if images "image" "text")
+            size count (or (plist-get data :frame-rate) 0) license)))
 
 (defun etaf-screensaver--import-file (file destination)
   "Import FILE into DESTINATION and return a report plist.
 Signal `etaf-screensaver-error' when no provider recognizes FILE or the
-recording fails validation."
+recording fails validation.  A recording that ships several files (a baked
+image bundle) is copied into one directory named after the reel; a single
+file is copied as it is."
   (let ((file (expand-file-name file)))
     (let* ((entry (or (etaf-screensaver--reel-provider-for file)
                       (etaf-screensaver--fail "No reel provider recognizes %s" file)))
            (provider-id (car entry))
            (provider (cdr entry))
            (data (etaf-screensaver--reel-read provider-id provider file))
+           (images (plist-get data :image-frames))
+           (frames (or images (plist-get data :frames)))
+           (kind (if images 'image 'text))
+           (frame-count (and (vectorp frames) (length frames)))
+           (frame-rate (plist-get data :frame-rate))
            (width (plist-get data :width))
            (height (plist-get data :height))
-           (frame-rate (plist-get data :frame-rate))
-           (frames (plist-get data :frames))
-           (frame-count (and (vectorp frames) (length frames)))
+           (image-size (plist-get data :image-size))
            (source (plist-get data :source))
+           (license (or (plist-get data :license) (plist-get provider :license)))
            (id (etaf-screensaver--import-name provider-id file))
            (directory (etaf-screensaver--import-directory destination))
-           (recording (expand-file-name (file-name-nondirectory file) directory))
+           (assets (or (plist-get data :assets) (list file)))
+           (bundle (and (cdr assets) (expand-file-name (symbol-name id) directory)))
+           (recording (if bundle
+                          (expand-file-name (file-name-nondirectory file) bundle)
+                        (expand-file-name (file-name-nondirectory file) directory)))
            (spec (list :id id
                        :title (format "%s: %s" (plist-get provider :title)
                                       (or (and (stringp source) (not (equal source "")) source)
-                                          (file-name-base file)))
-                       :summary (etaf-screensaver--import-summary
-                                 provider file source width height frame-count
-                                 frame-rate (plist-get provider :license))
+                                          (etaf-screensaver--import-label file)))
+                       :summary (etaf-screensaver--import-summary provider file data)
                        :tags '(imported)
                        :provider provider-id
-                       :recording (file-name-nondirectory recording)
+                       :recording (file-relative-name recording directory)
+                       :kind kind
                        :width width :height height :frame-rate frame-rate
                        :frame-count frame-count
-                       :source source :license (plist-get provider :license)))
+                       :source source :license license))
            (target (expand-file-name (format "%s.esr" id) directory)))
-      (unless (equal (file-truename file) (file-truename recording))
-        (copy-file file recording t))
+      (dolist (asset assets)
+        (let ((destination (if bundle
+                               (expand-file-name (file-name-nondirectory asset) bundle)
+                             recording)))
+          (unless (equal (file-truename asset) (file-truename destination))
+            (make-directory (file-name-directory destination) t)
+            (copy-file asset destination t))))
       (with-temp-file target
         (insert ";;; -*- lisp-data -*-\n")
         (prin1 spec (current-buffer))
         (insert "\n"))
-      (list :file file :status 'imported :provider provider-id
+      (list :file file :status 'imported :provider provider-id :kind kind
             :title (plist-get spec :title) :output target :recording recording
-            :width width :height height :frame-rate frame-rate
-            :frame-count frame-count :colors (plist-get data :colors)
+            :width width :height height :image-size image-size
+            :frame-rate frame-rate :frame-count frame-count
+            :colors (plist-get data :colors)
             :attributes (plist-get data :attributes)
-            :license (plist-get provider :license) :source source))))
+            :license license :source source))))
 
 (defun etaf-screensaver-import-recording (file &optional destination)
   "Import one recording FILE as a reel and return its report plist.

@@ -20,6 +20,9 @@
     {"name": "etaf-screensaver-reel-tests-imports-a-recording", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Importing a Terminal Text Effects recording copies it, writes a reel spec and the reel plays."},
     {"name": "etaf-screensaver-reel-tests-batch-report-classifies-files", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Batch import reports compatible, unrecognized and invalid recordings separately."},
     {"name": "etaf-screensaver-reel-tests-rejects-invalid-recordings", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Wrong versions, truncated streams and invalid frames signal errors and write nothing."},
-    {"name": "etaf-screensaver-reel-tests-loader-skips-broken-reels", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel spec with a missing recording is reported and skipped without disturbing other scenes."}
+    {"name": "etaf-screensaver-reel-tests-loader-skips-broken-reels", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel spec with a missing recording is reported and skipped without disturbing other scenes."},
+    {"name": "etaf-screensaver-reel-tests-image-frames-advance", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Baked image frames publish display slices that advance in order."},
+    {"name": "etaf-screensaver-reel-tests-imports-frame-bundle", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Importing a frame bundle copies every file, writes the reel spec and plays it."},
+    {"name": "etaf-screensaver-reel-tests-rejects-broken-frame-bundles", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Missing frames, non-images and bad JSON signal and write nothing."}
   ]
 }

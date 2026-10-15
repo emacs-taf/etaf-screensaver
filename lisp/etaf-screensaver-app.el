@@ -21,6 +21,7 @@
 (require 'etaf-screensaver-loader)
 (require 'etaf-screensaver-import)
 (require 'etaf-screensaver-tte)
+(require 'etaf-screensaver-frames)
 (require 'etaf-screensaver-scene-donut)
 (require 'etaf-screensaver-views)
 

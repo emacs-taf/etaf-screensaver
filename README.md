@@ -59,7 +59,9 @@ falling-sand, life, matrix, plasma, quotes, snow and starfield plus the
 recorded reels tte-beams, tte-synthgrid and tte-thunderstorm.
 See the [manual](docs/manual.md) for program composition, durations, frame-rate
 caps, repeatable seeds, custom scene files, recorded-animation import and
-callback authoring.
+callback authoring. Recordings can be text (Terminal Text Effects) or baked
+images (MilkDrop via butterchurn, shader or sketch previews); the manual
+explains how to bake a bundle without putting it in version control.
 The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 
 ## Development

@@ -423,6 +423,49 @@ presentation's thread. Recordings are read once when their scene starts and
 recent unchanged reads are cached, so a registered but unused reel holds only
 metadata, and an invalid recording reports at import or at first playback.
 
+### Baking image recordings
+
+A reel does not have to be text. The built-in `frames` provider reads a
+baked bundle — a JSON manifest plus still frames — and plays it as images.
+Use it for renderers Emacs cannot run: MilkDrop (butterchurn), shader
+previews or p5.js sketches. Baking happens offline; playback only decodes
+images.
+
+`scripts/bake-canvas-frames.mjs` produces a bundle. For Butterchurn presets
+it needs `npm install butterchurn butterchurn-presets` somewhere (pass
+`--modules`) and a Chrome with remote debugging on `--cdp-port` (default
+9222); it opens and closes its own tab and never touches other tabs:
+
+```sh
+node scripts/bake-canvas-frames.mjs --list-presets
+node scripts/bake-canvas-frames.mjs \
+  --preset "$$$ Royal - Mashup (197)" \
+  --seconds 8 --fps 15 --width 960 --height 540 --warmup 6 \
+  --out /tmp/royal --format jpeg --quality 0.75 \
+  --modules /path/to/node_modules \
+  --source "MilkDrop preset via butterchurn" --license "butterchurn-presets MIT"
+```
+
+Preset baking uses virtual time and a deterministic synthetic audio signal,
+so it is reproducible and runs as fast as the GPU renders. `--url URL
+[--canvas SELECTOR]` captures any page's canvas in real time instead
+(p5 sketches, shader previews). Import the result like any recording:
+
+```elisp
+(etaf-screensaver-import-recording "/tmp/royal/royal.frames.json")
+(etaf-screensaver-load-scenes)
+(etaf-screensaver-start 'frames-royal)
+```
+
+The import copies the whole bundle into one directory named after the reel,
+so the `.esr` spec and its frames stay together. Frames are still images and
+a bundle is much larger than a text recording; keep the canvas and frame
+count modest (for example 960×540 at 12–15 fps for 10 seconds), choose
+`--format jpeg` or `webp`, and keep baked bundles out of version control.
+Each frame is scaled to fit the canvas and centered; resizing the window
+rescales it, and the engine releases the previous frame from Emacs's image
+cache as the next one is published.
+
 ## Code scenes
 
 A scene that outgrows the DSL registers ordinary callbacks with

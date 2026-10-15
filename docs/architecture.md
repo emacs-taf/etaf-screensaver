@@ -41,6 +41,16 @@ dimensions, color depths and license per file instead of claiming universal
 support. The loader scans `.esr` specs beside `.esc` scenes and skips a
 broken spec without disturbing the others.
 
+Text recordings render as canvas rows; image recordings take a second path.
+The `frames` provider returns image file names and a pixel size; the reel
+layer scales each frame to fit the canvas, centers it and crops it per
+character row with a `display` slice, the same retained Host boundary ETAF
+video uses. The engine flushes the previous frame from Emacs's image cache
+after the next one is committed, so long playback keeps one decoded frame.
+Baking is a development step (`scripts/bake-canvas-frames.mjs`): it renders
+a browser canvas offline and writes still frames. The application never runs
+a browser, shader or decoder at playback.
+
 ## Presentation lifecycle
 
 Start validates and prepares the initial scene before replacing windows.

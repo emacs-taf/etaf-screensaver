@@ -9,7 +9,8 @@
 ;; The bundled recordings under lisp/reels were produced once with Terminal
 ;; Text Effects 0.15.0 (commit 6dbc34a0) from the text "ETAF" on an 80x24
 ;; canvas at 20 fps; tests/fixtures/tte/bad-row.tterec is a hand-built
-;; recording whose first row is two cells wide instead of three.
+;; recording whose first row is two cells wide instead of three.  Image
+;; fixtures under tests/fixtures/frames are two 40x20 PNGs and a manifest.
 
 ;;; Code:
 (require 'ert)
@@ -21,8 +22,8 @@
   "Directory holding this test file and its fixtures.")
 
 (defun etaf-screensaver-reel-tests--fixture (name)
-  "Return the path of fixture NAME under tests/fixtures/tte."
-  (expand-file-name (format "fixtures/tte/%s" name)
+  "Return the path of fixture NAME under tests/fixtures."
+  (expand-file-name (format "fixtures/%s" name)
                     etaf-screensaver-reel-tests--directory))
 
 (defun etaf-screensaver-reel-tests--bundled (name)
@@ -218,7 +219,7 @@
                                         (car (cdr error))))))
             (let ((error (should-error (etaf-screensaver-import-recording
                                         (etaf-screensaver-reel-tests--fixture
-                                         "bad-row.tterec")
+                                         "tte/bad-row.tterec")
                                         target)
                                        :type 'etaf-screensaver-error)))
               (should (string-match-p "cells wide" (car (cdr error)))))
@@ -245,6 +246,97 @@
             (let ((loaded (etaf-screensaver-load-scenes (list directory))))
               (should (= loaded 0)))
             (should-not (memq 'reel-test-missing (etaf-screensaver-scenes))))
+        (delete-directory directory t)))))
+
+(defun etaf-screensaver-reel-tests--display-image (buffer)
+  "Return the image file BUFFER displays, or nil."
+  (with-current-buffer buffer
+    (let ((position (next-single-property-change (point-min) 'display)))
+      (when position
+        (let ((display (get-text-property position 'display)))
+          (when (and (consp display) (consp (cdr display)))
+            (let ((image (cadr display)))
+              (when (eq (car-safe image) 'image)
+                (image-property image :file)))))))))
+
+(ert-deftest etaf-screensaver-reel-tests-image-frames-advance ()
+  "Baked image frames publish display slices that advance in order."
+  (etaf-screensaver-reel-tests--clean
+    (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
+      (etaf-screensaver-register-reel
+       (list :id 'reel-test-image :provider 'frames :recording manifest
+             :title "Baked fixture" :frame-rate 10))
+      (let* ((buffer (etaf-screensaver-start 'reel-test-image))
+             (first (etaf-screensaver-reel-tests--display-image buffer))
+             (deadline (+ (float-time) 3)))
+        (should (member (file-name-nondirectory first)
+                        '("frame-a.png" "frame-b.png")))
+        (while (and (< (float-time) deadline)
+                    (equal (etaf-screensaver-reel-tests--display-image buffer) first))
+          (sleep-for 0.02))
+        (let ((second (etaf-screensaver-reel-tests--display-image buffer)))
+          (should (member (file-name-nondirectory second)
+                          '("frame-a.png" "frame-b.png")))
+          (should-not (equal first second)))
+        (etaf-screensaver-stop)
+        (should-not (plist-get (etaf-screensaver-status) :active))))))
+
+(ert-deftest etaf-screensaver-reel-tests-imports-frame-bundle ()
+  "Importing a frame bundle copies every file and plays the reel."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (make-temp-file "frames-import-" t))
+           (source (expand-file-name "sample.frames.json" directory))
+           (target (expand-file-name "imported" directory)))
+      (unwind-protect
+          (progn
+            (dolist (name '("sample.frames.json" "frame-a.png" "frame-b.png"))
+              (copy-file (etaf-screensaver-reel-tests--fixture (format "frames/%s" name))
+                         (expand-file-name name directory)))
+            (let ((report (etaf-screensaver-import-recording source target)))
+              (should (eq (plist-get report :kind) 'image))
+              (should (equal (plist-get report :image-size) '(40 . 20)))
+              (should (= (plist-get report :frame-count) 2))
+              (should (equal (file-name-nondirectory (plist-get report :recording))
+                             "sample.frames.json"))
+              (should (file-regular-p (plist-get report :output)))
+              (dolist (name '("sample.frames.json" "frame-a.png" "frame-b.png"))
+                (should (file-regular-p
+                         (expand-file-name (format "frames-sample/%s" name) target)))))
+            (should (= (etaf-screensaver-load-scenes (list target)) 1))
+            (let ((buffer (etaf-screensaver-start 'frames-sample)))
+              (should (etaf-screensaver-reel-tests--display-image buffer))
+              (etaf-screensaver-stop)))
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-rejects-broken-frame-bundles ()
+  "Missing frames, non-images and bad JSON signal and write nothing."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (make-temp-file "frames-invalid-" t))
+           (target (expand-file-name "imported" directory)))
+      (unwind-protect
+          (progn
+            (let ((manifest (expand-file-name "missing.frames.json" directory)))
+              (with-temp-file manifest
+                (insert "{\"version\":1,\"width\":40,\"height\":20,\"frame_rate\":10,"
+                        "\"frames\":[\"absent.png\"]}"))
+              (let ((error (should-error (etaf-screensaver-import-recording manifest target)
+                                         :type 'etaf-screensaver-error)))
+                (should (string-match-p "missing" (car (cdr error))))))
+            (with-temp-file (expand-file-name "not-image.png" directory)
+              (insert "not an image"))
+            (let ((manifest (expand-file-name "broken.frames.json" directory)))
+              (with-temp-file manifest
+                (insert "{\"version\":1,\"width\":40,\"height\":20,\"frame_rate\":10,"
+                        "\"frames\":[\"not-image.png\"]}"))
+              (let ((error (should-error (etaf-screensaver-import-recording manifest target)
+                                         :type 'etaf-screensaver-error)))
+                (should (string-match-p "supported image" (car (cdr error))))))
+            (let ((manifest (expand-file-name "json.frames.json" directory)))
+              (with-temp-file manifest (insert "not json"))
+              (let ((error (should-error (etaf-screensaver-import-recording manifest target)
+                                         :type 'etaf-screensaver-error)))
+                (should (string-match-p "valid JSON" (car (cdr error))))))
+            (should-not (file-exists-p target)))
         (delete-directory directory t)))))
 
 (provide 'etaf-screensaver-reel-tests)

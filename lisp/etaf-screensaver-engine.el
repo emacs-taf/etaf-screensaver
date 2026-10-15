@@ -16,7 +16,31 @@
 
 (cl-defstruct (etaf-screensaver--session (:constructor etaf-screensaver--session-new))
   scene state item seed random-state columns rows size revision params
-  ticks elapsed dt frame published-frame canvas-ref runtime buffer)
+  ticks elapsed dt frame published-frame images canvas-ref runtime buffer)
+
+(defun etaf-screensaver--session-metrics (session)
+  "Return SESSION's effective display metrics, or nil before it is mounted."
+  (let ((runtime (etaf-screensaver--session-runtime session)))
+    (when (and runtime (etaf-runtime-mounted-p runtime))
+      (ignore-errors (etaf-display-metrics runtime)))))
+
+(defun etaf-screensaver--frame-images (frame)
+  "Return the distinct image objects FRAME displays."
+  (let ((position 0) (length (length frame)) (images nil))
+    (while (< position length)
+      (let ((display (get-text-property position 'display frame)))
+        (when (and (listp display) (listp (cdr display))
+                   (listp (cadr display)) (eq (car (cadr display)) 'image))
+          (cl-pushnew (cadr display) images :test #'equal)))
+      (setq position (next-single-property-change position 'display frame length)))
+    images))
+
+(defun etaf-screensaver--session-flush-images (session keep)
+  "Flush SESSION's retained images that KEEP does not contain, then keep KEEP."
+  (dolist (image (etaf-screensaver--session-images session))
+    (unless (member image keep)
+      (ignore-errors (image-flush image))))
+  (setf (etaf-screensaver--session-images session) keep))
 
 (defun etaf-screensaver--session-context (session)
   "Return the pure scene callback context for SESSION."
@@ -27,6 +51,7 @@
           :tick (etaf-screensaver--session-ticks session)
           :elapsed (etaf-screensaver--session-elapsed session)
           :dt (etaf-screensaver--session-dt session)
+          :metrics (etaf-screensaver--session-metrics session)
           :params (mapcar #'car (etaf-screensaver--session-params session))
           :param (lambda (key)
                    (let ((entry (assq (etaf-screensaver--parameter-key key)
@@ -57,6 +82,7 @@
 
 (defun etaf-screensaver--session-select (session item seed)
   "Recreate SESSION for ITEM at SEED, before notifying the view."
+  (etaf-screensaver--session-flush-images session nil)
   (setf (etaf-screensaver--session-item session) item
         (etaf-screensaver--session-scene session) (plist-get item :definition)
         (etaf-screensaver--session-seed session) seed
@@ -90,6 +116,8 @@
                (etaf-host-ref-bounds runtime ref)
                (not (equal frame (etaf-screensaver--session-published-frame session))))
       (etaf-runtime-update-host-content runtime ref frame)
+      (etaf-screensaver--session-flush-images
+       session (etaf-screensaver--frame-images frame))
       (setf (etaf-screensaver--session-published-frame session) frame))))
 
 (defun etaf-screensaver--session-advance (session dt)

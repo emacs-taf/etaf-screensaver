@@ -103,10 +103,14 @@
 ;; PROPERTIES is a plist with :title and :license display strings,
 ;; :extensions file name suffixes for batch import, :match (lambda (file))
 ;; recognizing the format and :read (lambda (file)) returning the recording
-;; as :width, :height, :frame-rate, :frames and optional :durations
-;; (seconds per frame), :ansi (frame text carries SGR runs) and :source.
-;; Re-registering an ID replaces it in place.  The built-in `tte' provider
-;; reads Terminal Text Effects recordings without running the tool.
+;; as text frames (:width, :height, :frames, optional :durations seconds
+;; per frame and :ansi for SGR runs) or image frames (:image-frames of
+;; image file names, optional :image-size); both carry :frame-rate and may
+;; add :source, :license and :assets (every file of a multi-file
+;; recording).  Re-registering an ID replaces it in place.  The built-in
+;; `tte' provider reads Terminal Text Effects recordings and the `frames'
+;; provider reads baked image-frame manifests, both without running any
+;; tool.
 ;;
 ;; Function: etaf-screensaver-register-reel (spec)
 ;;;###autoload (autoload 'etaf-screensaver-register-reel "etaf-screensaver" nil nil)
@@ -127,11 +131,12 @@
 ;; DESTINATION defaults to the user scene directory.  The native recording is
 ;; copied next to a new .esr reel spec that names its provider, dimensions,
 ;; frame count and license; it is validated first and never transcoded.
-;; The report holds :file, :status `imported', :provider, :title, :output,
-;; :recording, :width, :height, :frame-rate, :frame-count, :colors,
-;; :attributes, :license and :source.  A file no provider recognizes or a
-;; recording that fails validation signals etaf-screensaver-error and writes
-;; nothing.
+;; The report holds :file, :status `imported', :provider, :kind (text or
+;; image), :title, :output, :recording, :width, :height, :image-size,
+;; :frame-rate, :frame-count, :colors, :attributes, :license and :source.
+;; A multi-file recording is copied into one directory named after the reel.
+;; A file no provider recognizes or a recording that fails validation
+;; signals etaf-screensaver-error and writes nothing.
 ;;
 ;; Function: etaf-screensaver-import-directory (directory &optional destination)
 ;;;###autoload (autoload 'etaf-screensaver-import-directory "etaf-screensaver" nil t)

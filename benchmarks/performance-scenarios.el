@@ -33,7 +33,14 @@
                           t "The autonomous scene did not publish another frame")))
           :cleanup #'etaf-screensaver-stop)))
 
-(dolist (scene '(plasma matrix life quotes tte-thunderstorm))
+(etaf-screensaver-register-reel
+ (list :id 'benchmark-frames :provider 'frames :frame-rate 30
+       :recording (expand-file-name "../tests/fixtures/frames/sample.frames.json"
+                                    (file-name-directory
+                                     (locate-library "etaf-screensaver-loader")))
+       :title "Baked fixture"))
+
+(dolist (scene '(plasma matrix life quotes tte-thunderstorm benchmark-frames))
   (taf-benchmark-register
    (format "etaf-screensaver.frame.%s" scene)
    :version 2 :modes '(batch gui) :isolation 'series :impact 'local

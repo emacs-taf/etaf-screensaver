@@ -92,7 +92,22 @@
           (let ((status (etaf-screensaver-status)))
             (and (eq (plist-get status :scene) 'tte-synthgrid)
                  (>= (or (plist-get status :ticks) 0) 80))))
-        10))
+        10)
+       (etaf-screensaver-gui--action
+        "scene-frames-fixture"
+        (lambda (context)
+          (etaf-screensaver-stop)
+          (let* ((library (file-name-directory (locate-library "etaf-screensaver-loader")))
+                 (fixture (expand-file-name "../tests/fixtures/frames/sample.frames.json" library))
+                 (directory (make-temp-file "etaf-screensaver-frames-" t)))
+            (etaf-screensaver-import-recording fixture directory)
+            (etaf-screensaver-load-scenes (list directory))
+            (setf (etaf-gui-verifier-context-target-buffer context)
+                  (etaf-screensaver-start 'frames-sample))))
+        (lambda (_context)
+          (let ((status (etaf-screensaver-status)))
+            (and (eq (plist-get status :scene) 'frames-sample)
+                 (>= (or (plist-get status :ticks) 0) 2))))))
       (mapcar
        (lambda (size)
          (etaf-screensaver-gui--action
