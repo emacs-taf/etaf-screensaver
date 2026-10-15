@@ -161,8 +161,7 @@ character."
                         (etaf-screensaver--banner-next-effect
                          (plist-get state :effects) (plist-get state :effect) random)
                         (plist-get state :color)
-                        (let ((colors (etaf-screensaver--dsl-value
-                                       (plist-get layer :colors) env)))
+                        (let ((colors (plist-get layer :colors)))
                           (if (and (proper-list-p colors) colors)
                               (nth (funcall random (length colors)) colors)
                             (or (car-safe colors) "#E8ECF1")))))

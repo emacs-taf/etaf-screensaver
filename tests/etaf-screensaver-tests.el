@@ -199,6 +199,20 @@
             (should-not (string-match-p "SPC\|fps\|参数" text)))
           (etaf-screensaver-stop))))))
 
+(ert-deftest etaf-screensaver-tests-banner-rotates-effects ()
+  "A long-running banner rotates its effect and colour without failing."
+  (etaf-screensaver-tests--clean
+    (etaf-screensaver-start '(:scene banner :params ((effect-time . 1) (hold . 0))))
+    (let ((deadline (+ (float-time) 4)))
+      (while (and (< (float-time) deadline)
+                  (< (or (plist-get (etaf-screensaver-status) :elapsed) 0) 1.2))
+        (sleep-for 0.05)))
+    (let ((status (etaf-screensaver-status)))
+      (should (plist-get status :active))
+      (should (eq (plist-get status :scene) 'banner))
+      (should (> (or (plist-get status :elapsed) 0) 1.0)))
+    (etaf-screensaver-stop)))
+
 (ert-deftest etaf-screensaver-tests-invalid-start-rolls-back ()
   "Invalid configuration or a scene error leaves no takeover or resources."
   (etaf-screensaver-tests--clean

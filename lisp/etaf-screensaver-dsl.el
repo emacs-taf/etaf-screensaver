@@ -140,15 +140,18 @@ EXTRAS (layer fields) shadow the scene parameters, which shadow the globals."
 
 (defun etaf-screensaver--dsl-value (value environment)
   "Return VALUE resolved against ENVIRONMENT.
-A symbol names a binding, a list is an expression and anything else is
-returned as it is.  Structured properties (rules, material tables) are read
-raw by their layer kind and never go through this function."
+A symbol names a binding, a symbol-headed list is an expression and any
+other value is returned as it is.  A list of literals, such as a palette of
+color strings, is data rather than a call.  Structured properties (rules,
+material tables) are read raw by their layer kind and never go through this
+function."
   (cond ((null value) nil)
         ((symbolp value)
          (if (assq value environment)
              (cdr (assq value environment))
            (etaf-screensaver--fail "Unbound scene variable: %s" value)))
-        ((consp value) (etaf-screensaver--expr-eval value environment))
+        ((and (consp value) (symbolp (car value)))
+         (etaf-screensaver--expr-eval value environment))
         (t value)))
 
 ;;; Canvas.
