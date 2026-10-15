@@ -14,6 +14,7 @@
     {"name": "etaf-screensaver-tests-bundled-scenes-run", "file": "tests/etaf-screensaver-tests.el", "purpose": "Every bundled scene renders and advances autonomously without workspace controls."},
     {"name": "etaf-screensaver-tests-banner-rotates-effects", "file": "tests/etaf-screensaver-tests.el", "purpose": "A long-running banner rotates its effect and colour without failing."},
     {"name": "etaf-screensaver-tests-packs-play-as-configured", "file": "tests/etaf-screensaver-tests.el", "purpose": "Pack items play their scenes in order, honor counts and reject unknown packs."},
+    {"name": "etaf-screensaver-tests-resumes-after-dismissal", "file": "tests/etaf-screensaver-tests.el", "purpose": "A later start of the configured program resumes at the work that was playing."},
     {"name": "etaf-screensaver-tests-invalid-start-rolls-back", "file": "tests/etaf-screensaver-tests.el", "purpose": "Bad configuration and scene failures leave the editor and resource inventory unchanged."},
     {"name": "etaf-screensaver-tests-external-buffer-kill-cleans-up", "file": "tests/etaf-screensaver-tests.el", "purpose": "Externally killing the presentation buffer restores windows and cancels animation."},
     {"name": "etaf-screensaver-tests-loader-and-catalog", "file": "tests/etaf-screensaver-tests.el", "purpose": "Scene files replace registrations while a malformed file reports independently."},

@@ -239,6 +239,23 @@
           (etaf-screensaver-stop))
       (setq etaf-screensaver-packs (assq-delete-all 'test-pack etaf-screensaver-packs)))))
 
+(ert-deftest etaf-screensaver-tests-resumes-after-dismissal ()
+  "A later start of the configured program resumes at its current work."
+  (etaf-screensaver-tests--clean
+    (let ((etaf-screensaver-program
+           '(:order sequential
+             :scenes ((:scene matrix :duration 0.15) (:scene snow :duration 30)))))
+      (etaf-screensaver-start)
+      (let ((deadline (+ (float-time) 3)))
+        (while (and (< (float-time) deadline)
+                    (eq (plist-get (etaf-screensaver-status) :scene) 'matrix))
+          (sleep-for 0.02)))
+      (should (eq (plist-get (etaf-screensaver-status) :scene) 'snow))
+      (etaf-screensaver-stop)
+      (etaf-screensaver-start)
+      (should (eq (plist-get (etaf-screensaver-status) :scene) 'snow))
+      (etaf-screensaver-stop))))
+
 (ert-deftest etaf-screensaver-tests-invalid-start-rolls-back ()
   "Invalid configuration or a scene error leaves no takeover or resources."
   (etaf-screensaver-tests--clean

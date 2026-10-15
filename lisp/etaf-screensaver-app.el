@@ -34,11 +34,17 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program queue random-state seed index deadline last-time)
+  program raw-program queue random-state seed index deadline last-time)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
 (defvar etaf-screensaver-mode nil)
+(defvar etaf-screensaver--resume nil
+  "Playback position kept across dismissals of the configured program.
+Set when a presentation stops and consumed by the next start that uses
+`etaf-screensaver-program' unchanged, so an interrupted screensaver resumes
+at the work it was showing instead of replaying the round from its first
+item.  An explicit PROGRAM argument starts a fresh round.")
 
 (defun etaf-screensaver--cancel-idle ()
   "Release the automatic mode's pending watcher."
@@ -196,10 +202,17 @@ This is a visual screensaver, not an operating-system security lock."
     (when (active-minibuffer-window)
       (user-error "Cannot start a screensaver while the minibuffer is active"))
     (etaf-screensaver--validate-options)
-    (let* ((tree (etaf-screensaver--compile-program (or program etaf-screensaver-program)))
-           (seed (or etaf-screensaver-seed (random most-positive-fixnum)))
+    (let* ((requested (or program etaf-screensaver-program))
+           (resume (and (null program)
+                        (equal (plist-get etaf-screensaver--resume :program) requested)
+                        etaf-screensaver--resume))
+           (tree (etaf-screensaver--compile-program requested))
+           (seed (or (and resume (plist-get resume :seed))
+                     (or etaf-screensaver-seed (random most-positive-fixnum))))
            (rng (cl-make-random-state seed))
-           (queue (etaf-screensaver--program-round tree rng))
+           (queue (if resume
+                      (copy-sequence (plist-get resume :queue))
+                    (etaf-screensaver--program-round tree rng)))
            (item (pop queue))
            (frame (selected-frame))
            (configuration (current-window-configuration frame))
@@ -214,7 +227,9 @@ This is a visual screensaver, not an operating-system security lock."
                   owner (etaf-screensaver--presentation-new
                          :session session :frame frame :configuration configuration
                          :origin-buffer origin-buffer
-                         :program tree :queue queue :random-state rng :seed seed :index 0
+                         :program tree :queue queue :random-state rng :seed seed
+                         :raw-program requested
+                         :index (if resume (plist-get resume :index) 0)
                          :track-mouse track-mouse
                          :frame-parameters
                          (cl-loop for key in '(tab-bar-lines tool-bar-lines)
@@ -276,6 +291,14 @@ presentation buffer survives.  When automatic mode is enabled, only its
 idle watcher and rearming hook remain, waiting a fresh idle interval."
   (interactive)
   (when-let* ((owner etaf-screensaver--active))
+    ;; Keep the playback position for the next automatic start.
+    (setq etaf-screensaver--resume
+          (list :program (etaf-screensaver--presentation-raw-program owner)
+                :queue (cons (etaf-screensaver--session-item
+                              (etaf-screensaver--presentation-session owner))
+                             (etaf-screensaver--presentation-queue owner))
+                :index (etaf-screensaver--presentation-index owner)
+                :seed (etaf-screensaver--presentation-seed owner)))
     ;; Clear ownership first: unmount, buffer death and map teardown can reenter.
     (setq etaf-screensaver--active nil)
     (when (timerp (etaf-screensaver--presentation-timer owner))

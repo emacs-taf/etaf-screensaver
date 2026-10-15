@@ -42,7 +42,9 @@
 ;;;###autoload (autoload 'etaf-screensaver-start "etaf-screensaver" nil t)
 ;; Present PROGRAM, defaulting to etaf-screensaver-program, in the selected
 ;; frame and return its buffer.  Starting while active returns the existing
-;; buffer.  Invalid configuration leaves the original windows unchanged;
+;; buffer.  When no PROGRAM argument is given, a dismissed presentation
+;; resumes at the work it was showing; an explicit PROGRAM starts a fresh
+;; round.  Invalid configuration leaves the original windows unchanged;
 ;; errors during takeover restore them before signaling.  Input is consumed
 ;; rather than replayed into the restored buffer.
 ;;
