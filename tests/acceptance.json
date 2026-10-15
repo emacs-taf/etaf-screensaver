@@ -3,6 +3,13 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-presentation-tests-color-only-animation", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "A work changing only colors repaints after its first tick."},
+    {"name": "etaf-screensaver-presentation-tests-independent-wall", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Four independent works animate concurrently and a fifth plays on the next page without duplication."},
+    {"name": "etaf-screensaver-presentation-tests-styles-preserve-unicode", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "All four styles preserve wide characters and exact viewport row/column budgets."},
+    {"name": "etaf-screensaver-presentation-tests-style-precedence", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Global presentation overrides pack suggestions while explicit group/item styles take priority."},
+    {"name": "etaf-screensaver-presentation-tests-full-default-catalog", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "The default round includes every selected pack's works, including its tail."},
+    {"name": "etaf-screensaver-presentation-tests-resume-configuration", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Previews preserve the configured program's position and effective setting changes invalidate it."},
+    {"name": "etaf-screensaver-presentation-tests-wall-failure-rolls-back", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "A broken mosaic tile leaves the editor and timer inventory unchanged."},
     {"name": "etaf-screensaver-tests-restores-and-releases", "file": "tests/etaf-screensaver-tests.el", "purpose": "Repeated start and stop restore windows and release timers, input interception, tracking and buffers without starting processes."},
     {"name": "etaf-screensaver-tests-key-wakes-without-editing", "file": "tests/etaf-screensaver-tests.el", "purpose": "A wake key restores the original buffer without editing it."},
     {"name": "etaf-screensaver-tests-pointer-wakes", "file": "tests/etaf-screensaver-tests.el", "purpose": "Mouse movement, a complete click and wheel input dismiss the presentation."},

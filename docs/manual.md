@@ -35,8 +35,13 @@ replaces the watcher rather than accumulating timers; do this after changing
 
 ## Composing playback
 
-A program is a scene symbol, a configured scene item, or a group containing
-more programs. The root repeats after each finite round.
+A program is a scene symbol, a configured scene item, a named pack, or a group
+containing more programs. The root repeats after each finite round. A start
+without an explicit program restarts the work/page interrupted by the previous
+dismissal, then continues its queue and program random state. It does not seek
+to the interrupted frame inside a recording. Effective scene settings, pack
+contents, registrations or seed changes discard that position. Explicit
+program arguments preview a fresh round without replacing the saved position.
 
 ```elisp
 ;; One animation, recreated after its duration.
@@ -57,8 +62,8 @@ more programs. The root repeats after each finite round.
                  (:order shuffle :scenes (snow plasma donut)))))
 ```
 
-Groups take `:order`, a nonempty `:scenes` list and an optional positive
-`:count` (default: child count). Sequential order wraps through children;
+Groups take `:order` (default: `sequential`), a nonempty `:scenes` list and an
+optional positive `:count` (default: child count). Sequential order wraps through children;
 shuffle draws without replacement within each bag and creates another bag
 if count exceeds child count; random samples with replacement. Thus random
 can repeat a scene or group, whereas shuffle covers every child in a bag.
@@ -113,7 +118,7 @@ defaults applied to every scene in it:
 ```
 
 A pack entry takes :title, :summary, :theme (dark or light), :order,
-:background, :duration, :frame-rate, :params and :scenes.  Background gives a
+:background, :duration, :frame-rate, :presentation, :params and :scenes.  Background gives a
 pack its paper: the light `ink` pack paints cream behind dark-ink recordings.
 
 `etaf-screensaver-program` accepts `(:pack NAME)` items, so the playback
@@ -139,17 +144,71 @@ strategy is configurable without touching the scenes:
       '(:order shuffle :scenes ((:pack neon) (:pack ember))))
 ```
 
-Pack items accept :order, :count, :duration, :frame-rate, :background and
-:params overrides.  A recorded work registers its recorded length as its
+Pack items accept :order, :count, :duration, :frame-rate, :background,
+:presentation and :params overrides. The default program selects every work
+in each of its packs, not a permanently truncated prefix. An explicitly
+smaller sequential :count selects only that many children per visit; omit it
+to cover the full pack, or use shuffle to sample a different subset.  A recorded work registers its recorded length as its
 natural :duration, so `(:pack ink)` plays each recording once instead of
 cutting it mid-loop; set `:duration` explicitly to loop a work instead.
+
+## Presentation independently of content
+
+Keep the program and choose its presentation separately:
+
+```elisp
+(setq etaf-screensaver-program '(:pack ink)
+      etaf-screensaver-presentation 'card)
+```
+
+| Style | Presentation |
+| --- | --- |
+| `full` | The work occupies the whole canvas, with no caption. |
+| `card` | A centered bordered work and caption on a dark mat; light works keep their paper background. |
+| `band` | A wide cinema strip, a clock row and a caption. The clock never overwrites the work. |
+| `mosaic` | Up to four independent works on one page, each with its own state, seed, background and caption. Narrow windows stack them vertically. |
+
+The default `etaf-screensaver-presentation` is nil: each pack supplies its
+suggestion, and standalone works use full. A non-nil global value overrides
+pack suggestions. An explicit `:presentation` on a group or item has priority;
+children inherit a group's style unless they specify their own.
+
+```elisp
+;; Four chosen works concurrently; the next page has only the fifth work.
+(setq etaf-screensaver-program
+      '(:presentation mosaic
+        :scenes (tte-beams tte-synthgrid tte-bubbles tte-thunderstorm starfield)))
+
+;; Keep two packs separate, with independently chosen presentation/order.
+(setq etaf-screensaver-program
+      '(:order shuffle
+        :scenes ((:pack neon :presentation mosaic :order shuffle)
+                 (:pack ink :presentation card :order sequential))))
+```
+
+Consecutive mosaic selections form pages of at most four works without
+crossing pack boundaries. A partial page never repeats a work to fill empty
+slots. Explicit repetitions in a program, or random sampling with replacement,
+can still select the same work more than once. The page stays for its longest
+work's duration; shorter recordings loop at native speed. This does not make
+a recording's end-to-start seam seamless. `:count` counts selected works before
+pagination, while status `:index` counts pages. `:works` and `:up-next-works`
+report the actual concurrent selections.
+
+A drawable canvas of **64 columns by 24 rows** is the minimum recommended
+viewport for the four presentations. Short windows retain their borders and
+captions with less artwork. Below the minimum, fixed framing geometry is
+clipped deliberately; glyphs are not squeezed. Text recordings keep their native
+cell size and center-crop; image recordings fit within their allocated tile.
+Resizing preserves reel position and passes the new content rectangle to each
+work's resize callback, without changing page order.
 
 ## Concepts
 
 A **scene** is a pure generative program registered under an identifier. It
 builds a state, advances it by one frame and projects it into canvas rows. The
-presentation owns one session: the clock, seed, parameter values and frame
-publication. It creates no extra frame and changes no user buffer contents.
+presentation owns the clock and composed publication; each simultaneous work
+has independent scene state, seed and parameter values. It creates no extra frame and changes no user buffer contents.
 
 A **spec** is inert data describing a scene: a title, parameters and a stack of
 **layers**. Each layer names a registered **kind** and its properties. The DSL
@@ -185,7 +244,7 @@ Each descriptor is a plist:
 
 | Key | Applies to | Meaning |
 | --- | --- | --- |
-| `:key` | all | symbol used in expressions and `etaf-screensaver-set-param` |
+| `:key` | all | symbol used in expressions and the configured `:params` alist |
 | `:label` | all | nonempty display label |
 | `:type` | all | `number`, `choice` or `toggle` |
 | `:default` | all | initial value, valid for the type |

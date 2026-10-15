@@ -1,0 +1,197 @@
+;;; -*- lexical-binding: t; -*-
+;;; etaf-screensaver-presentation-tests.el --- Public presentation acceptance
+
+;; SPDX-License-Identifier: GPL-3.0-or-later
+
+;;; Commentary:
+;; Observe the public buffer, status and callback contexts.  No engine helpers
+;; or structures are used: a tile must actually publish its own moving work.
+
+;;; Code:
+(require 'ert)
+(require 'cl-lib)
+(require 'etaf-screensaver)
+
+(defmacro etaf-screensaver-presentation-tests--clean (&rest body)
+  "Run BODY with isolated settings and unconditional teardown."
+  (declare (indent 0))
+  `(let ((etaf-screensaver-seed 99)
+         (etaf-screensaver-presentation 'full)
+         (etaf-screensaver-max-frame-rate 60)
+         (etaf-screensaver-scene-options nil))
+     (etaf-screensaver-mode -1)
+     (unwind-protect (progn ,@body)
+       (etaf-screensaver-stop))))
+
+(defun etaf-screensaver-presentation-tests--wait (predicate)
+  "Wait at most three seconds for public observation PREDICATE."
+  (let ((deadline (+ (float-time) 3)))
+    (while (and (< (float-time) deadline) (not (funcall predicate)))
+      (sleep-for 0.005)))
+  (should (funcall predicate)))
+
+(defun etaf-screensaver-presentation-tests--text (buffer)
+  "Return BUFFER's plain visible text."
+  (with-current-buffer buffer
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(ert-deftest etaf-screensaver-presentation-tests-color-only-animation ()
+  "A frame changing only face properties must still repaint after its first tick."
+  (etaf-screensaver-presentation-tests--clean
+    (etaf-screensaver-define-scene presentation-colors
+      :frame-rate 40
+      :create (lambda (_context) nil)
+      :step (lambda (_state _context) nil)
+      :render (lambda (_state context)
+                (list (propertize "CHROMA" 'face
+                                  (list :foreground
+                                        (if (< (plist-get context :tick) 2)
+                                            "#FF0000" "#00FF00"))))))
+    (let ((buffer (etaf-screensaver-start 'presentation-colors)))
+      (etaf-screensaver-presentation-tests--wait
+       (lambda () (>= (or (plist-get (etaf-screensaver-status) :ticks) 0) 3)))
+      (let ((color (with-current-buffer buffer
+                     (save-excursion
+                       (goto-char (point-min))
+                       (search-forward "CHROMA")
+                       (let ((face (get-text-property (- (point) 6) 'face)))
+                         (cl-loop for spec in (if (keywordp (car-safe face))
+                                                 (list face) face)
+                                  thereis (and (listp spec)
+                                               (plist-get spec :foreground))))))))
+        (should (equal color "#00FF00"))))))
+
+(defmacro etaf-screensaver-presentation-tests--work (id label)
+  "Register a public test work ID with its own moving LABEL."
+  `(etaf-screensaver-define-scene ,id
+     :title ,label :frame-rate 40
+     :create (lambda (context) (list :seed (plist-get context :seed)))
+     :step (lambda (_state _context) nil)
+     :resize (lambda (state _context) state)
+     :render (lambda (_state context)
+               (list (format "%s 中 %03d" ,label (plist-get context :tick))))))
+
+(etaf-screensaver-presentation-tests--work presentation-one "ONE")
+(etaf-screensaver-presentation-tests--work presentation-two "TWO")
+(etaf-screensaver-presentation-tests--work presentation-three "THREE")
+(etaf-screensaver-presentation-tests--work presentation-four "FOUR")
+(etaf-screensaver-presentation-tests--work presentation-five "FIVE")
+
+(ert-deftest etaf-screensaver-presentation-tests-independent-wall ()
+  "A wall visibly advances four separate works and keeps the fifth for its next page."
+  (etaf-screensaver-presentation-tests--clean
+    (let* ((buffer (etaf-screensaver-start
+                    '(:presentation mosaic :scenes
+                      ((:scene presentation-one :duration 0.35)
+                       (:scene presentation-two :duration 0.35)
+                       (:scene presentation-three :duration 0.35)
+                       (:scene presentation-four :duration 0.35)
+                       (:scene presentation-five :duration 30)))))
+           (initial (etaf-screensaver-status)))
+      (should (equal (plist-get initial :works)
+                     '(presentation-one presentation-two presentation-three presentation-four)))
+      (should (equal (plist-get initial :up-next-works) '((presentation-five))))
+      (etaf-screensaver-presentation-tests--wait
+       (lambda () (>= (or (plist-get (etaf-screensaver-status) :ticks) 0) 2)))
+      (let ((text (etaf-screensaver-presentation-tests--text buffer)))
+        (dolist (label '("ONE" "TWO" "THREE" "FOUR"))
+          (should (string-match-p (concat label " 中 00[2-9]") text)))
+        (should-not (string-match-p "FIVE" text)))
+      (etaf-screensaver-presentation-tests--wait
+       (lambda () (eq (plist-get (etaf-screensaver-status) :scene) 'presentation-five)))
+      (let ((text (etaf-screensaver-presentation-tests--text buffer))
+            (works (plist-get (etaf-screensaver-status) :works)))
+        (should (equal works '(presentation-five)))
+        (should (string-match-p "FIVE 中" text))
+        (should-not (string-match-p "ONE 中" text))))))
+
+(ert-deftest etaf-screensaver-presentation-tests-styles-preserve-unicode ()
+  "Every presentation publishes a rectangular canvas without splitting wide glyphs."
+  (etaf-screensaver-presentation-tests--clean
+    (dolist (style '(full card band mosaic))
+      (let* ((buffer (etaf-screensaver-start
+                      (list :scene 'presentation-one :presentation style)))
+             (status (etaf-screensaver-status))
+             (text (etaf-screensaver-presentation-tests--text buffer))
+             (lines (split-string (string-remove-suffix "\n" text) "\n")))
+        (should (eq (plist-get status :presentation) style))
+        (should (string-match-p "ONE 中 000" text))
+        (should (= (length lines) (plist-get status :rows)))
+        (dolist (line lines)
+          (should (= (string-width line) (plist-get status :columns)))))
+      (etaf-screensaver-stop))))
+
+(ert-deftest etaf-screensaver-presentation-tests-style-precedence ()
+  "A global style overrides pack suggestions; explicit item/group styles win."
+  (etaf-screensaver-presentation-tests--clean
+    (let ((etaf-screensaver-packs
+           '((test-style :presentation card :scenes (presentation-one presentation-two))))
+          (etaf-screensaver-presentation 'band))
+      (dolist (case '(((:pack test-style) . band)
+                      ((:pack test-style :presentation full) . full)
+                      ((:presentation mosaic :scenes ((:pack test-style))) . mosaic)))
+        (etaf-screensaver-start (car case))
+        (let ((actual (plist-get (etaf-screensaver-status) :presentation)))
+          (should (eq actual (cdr case))))
+        (etaf-screensaver-stop))
+      (let ((etaf-screensaver-presentation nil))
+        (etaf-screensaver-start '(:pack test-style))
+        (let ((style (plist-get (etaf-screensaver-status) :presentation)))
+          (should (eq style 'card)))))))
+
+(ert-deftest etaf-screensaver-presentation-tests-full-default-catalog ()
+  "The default program does not permanently omit the tail of a pack."
+  (etaf-screensaver-presentation-tests--clean
+    (let ((etaf-screensaver-presentation nil))
+      (etaf-screensaver-start etaf-screensaver-program)
+      (let* ((status (etaf-screensaver-status))
+             (selected (apply #'append (cons (plist-get status :works)
+                                            (plist-get status :up-next-works)))))
+        (dolist (pack etaf-screensaver-packs)
+          (dolist (scene (plist-get (cdr pack) :scenes))
+            (should (memq scene selected))))))))
+
+(ert-deftest etaf-screensaver-presentation-tests-resume-configuration ()
+  "A preview preserves position; changing effective settings invalidates it."
+  (etaf-screensaver-presentation-tests--clean
+    (let ((etaf-screensaver-program
+           '(:scenes ((:scene presentation-one :duration 0.08) presentation-two))))
+      (etaf-screensaver-start)
+      (etaf-screensaver-presentation-tests--wait
+       (lambda () (eq (plist-get (etaf-screensaver-status) :scene) 'presentation-two)))
+      (let ((seed (plist-get (etaf-screensaver-status) :seed)))
+        (etaf-screensaver-stop)
+        (etaf-screensaver-start 'presentation-three)
+        (etaf-screensaver-stop)
+        (etaf-screensaver-start)
+        (let ((status (etaf-screensaver-status)))
+          (should (eq (plist-get status :scene) 'presentation-two))
+          (should (= (plist-get status :seed) seed))))
+      (etaf-screensaver-stop)
+      (let ((etaf-screensaver-presentation 'card))
+        (etaf-screensaver-start)
+        (let ((status (etaf-screensaver-status)))
+          (should (eq (plist-get status :scene) 'presentation-one))
+          (should (eq (plist-get status :presentation) 'card)))))))
+
+(ert-deftest etaf-screensaver-presentation-tests-wall-failure-rolls-back ()
+  "Any failed tile aborts startup without taking over or leaking timers."
+  (etaf-screensaver-presentation-tests--clean
+    (etaf-screensaver-define-scene presentation-broken
+      :create (lambda (_context) nil)
+      :step (lambda (_state _context) nil)
+      :render (lambda (_state _context) (error "Broken work")))
+    (set-window-configuration (current-window-configuration))
+    (let ((configuration (current-window-configuration))
+          (timers (copy-sequence timer-list)))
+      (should-error (etaf-screensaver-start
+                     '(:presentation mosaic :scenes (presentation-one presentation-broken))))
+      (let ((active (plist-get (etaf-screensaver-status) :active))
+            (restored (window-configuration-equal-p configuration (current-window-configuration)))
+            (remaining (cl-set-difference timer-list timers)))
+        (should-not active)
+        (should restored)
+        (should-not remaining)))))
+
+(provide 'etaf-screensaver-presentation-tests)
+;;; etaf-screensaver-presentation-tests.el ends here

@@ -43,8 +43,10 @@
 ;; Present PROGRAM, defaulting to etaf-screensaver-program, in the selected
 ;; frame and return its buffer.  Starting while active returns the existing
 ;; buffer.  When no PROGRAM argument is given, a dismissed presentation
-;; resumes at the work it was showing; an explicit PROGRAM starts a fresh
-;; round.  Invalid configuration leaves the original windows unchanged;
+;; restarts its current work/page if the effective configuration is unchanged.
+;; Its queue, scene seed and program random state continue.  An explicit
+;; PROGRAM previews a fresh round without replacing this saved position.
+;; Invalid configuration leaves the original windows unchanged;
 ;; errors during takeover restore them before signaling.  Input is consumed
 ;; rather than replayed into the restored buffer.
 ;;
@@ -60,7 +62,10 @@
 ;; Return :active and :automatic, plus the active scene's :scene, :buffer name,
 ;; zero-based :index, :seed, :ticks, :elapsed, :columns, :rows, :frame-rate,
 ;; copied :params alist and :up-next scene identifiers for this round.
-;; Useful for configuration inspection and lifecycle integration.
+;; Also returns :presentation, :duration (page dwell seconds), :works (the
+;; simultaneous scene ids) and :up-next-works (one id list per pending page).
+;; :scene and each :up-next entry name the first work on their page; :index
+;; counts pages.  Returned lists can be modified without changing playback.
 ;;
 ;; Function: etaf-screensaver-scenes ()
 ;;;###autoload (autoload 'etaf-screensaver-scenes "etaf-screensaver" nil nil)
@@ -164,18 +169,28 @@
 ;; Variable: etaf-screensaver-program
 ;; Repeating program: a scene symbol, a scene item plist, a pack item or a
 ;; nested group.  An item has :scene and optional :duration, :frame-rate,
-;; :background and :params alist.  A pack item (:pack NAME) plays scenes from
+;; :background, :presentation and :params alist.  A pack item (:pack NAME) plays scenes from
 ;; etaf-screensaver-packs and may override the pack's :order, :count and
 ;; defaults.  A group has :order sequential/shuffle/random, :scenes children
-;; and optional :count selections (default child count).  Shuffle draws
+;; and optional :count selections (default child count) and :presentation
+;; inherited by children without an explicit style.  Omitted :order means
+;; sequential.  Shuffle draws
 ;; without replacement within each bag; random allows repeats.  Groups nest
 ;; to select sequences, hold one style pack for a number of scenes or rotate
-;; whole packs.
+;; whole packs.  Consecutive mosaic works within a pack share pages of at
+;; most four independent scenes.  Pages never duplicate a work to fill slots;
+;; their duration is the longest work's duration, and shorter reels loop.
+;;
+;; Variable: etaf-screensaver-presentation
+;; Nil uses each pack's suggested style (full for standalone works).  Full,
+;; card, band or mosaic overrides pack suggestions globally; explicit group
+;; or item :presentation settings take priority.  Mosaic presents independent
+;; works concurrently, not crops of one work; narrow windows stack the tiles.
 ;;
 ;; Variable: etaf-screensaver-packs
 ;; Named style packs: alist of (ID :title TITLE :summary SUMMARY :theme
 ;; dark|light :order ORDER :background COLOR :duration SECONDS :frame-rate
-;; RATE :params ALIST :scenes (SCENE...)).  Bundled packs cover the shipped
+;; RATE :presentation STYLE :params ALIST :scenes (SCENE...)).  Bundled packs cover the shipped
 ;; scenes; add your own with `add-to-list' after baking or registering
 ;; scenes.  Playing a pack keeps its works in one visual language.
 ;;

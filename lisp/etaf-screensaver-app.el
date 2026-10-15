@@ -34,7 +34,7 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program raw-program queue random-state seed index deadline last-time)
+  program configured-seed resumable queue random-state seed index deadline last-time)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
@@ -42,9 +42,10 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 (defvar etaf-screensaver--resume nil
   "Playback position kept across dismissals of the configured program.
 Set when a presentation stops and consumed by the next start that uses
-`etaf-screensaver-program' unchanged, so an interrupted screensaver resumes
-at the work it was showing instead of replaying the round from its first
-item.  An explicit PROGRAM argument starts a fresh round.")
+the same effective configuration, so an interrupted screensaver restarts
+its current work instead of replaying the round from its first item.  The
+program generator retains its random state.  Explicit PROGRAM previews
+neither consume nor replace this position.")
 
 (defun etaf-screensaver--cancel-idle ()
   "Release the automatic mode's pending watcher."
@@ -136,8 +137,8 @@ item.  An explicit PROGRAM argument starts a fresh round.")
     (setf (etaf-screensaver--presentation-face-cookie owner)
           (face-remap-add-relative
            'default :background
-           (plist-get (etaf-screensaver--session-item
-                       (etaf-screensaver--presentation-session owner)) :background)))))
+           (etaf-screensaver--session-background
+            (etaf-screensaver--presentation-session owner))))))
 
 (defun etaf-screensaver--next (owner now)
   "Select OWNER's next item at wall time NOW."
@@ -159,7 +160,10 @@ item.  An explicit PROGRAM argument starts a fresh round.")
     (let* ((session (etaf-screensaver--presentation-session owner))
            (rate (plist-get (etaf-screensaver--session-item session) :frame-rate)))
       (setf (etaf-screensaver--presentation-timer owner)
-            (run-at-time (/ 1.0 rate) nil #'etaf-screensaver--tick owner)))))
+            (run-at-time (max 0.001 (- (+ (etaf-screensaver--presentation-last-time owner)
+                                          (/ 1.0 rate))
+                                       (float-time)))
+                         nil #'etaf-screensaver--tick owner)))))
 
 (defun etaf-screensaver--tick (owner)
   "Render one live frame for OWNER; failures unwind the whole presentation."
@@ -202,14 +206,14 @@ This is a visual screensaver, not an operating-system security lock."
     (when (active-minibuffer-window)
       (user-error "Cannot start a screensaver while the minibuffer is active"))
     (etaf-screensaver--validate-options)
-    (let* ((requested (or program etaf-screensaver-program))
+    (let* ((tree (etaf-screensaver--compile-program (or program etaf-screensaver-program)))
            (resume (and (null program)
-                        (equal (plist-get etaf-screensaver--resume :program) requested)
+                        (equal (plist-get etaf-screensaver--resume :program) tree)
+                        (equal (plist-get etaf-screensaver--resume :configured-seed) etaf-screensaver-seed)
                         etaf-screensaver--resume))
-           (tree (etaf-screensaver--compile-program requested))
            (seed (or (and resume (plist-get resume :seed))
-                     (or etaf-screensaver-seed (random most-positive-fixnum))))
-           (rng (cl-make-random-state seed))
+                     etaf-screensaver-seed (random most-positive-fixnum)))
+           (rng (cl-make-random-state (if resume (plist-get resume :random-state) seed)))
            (queue (if resume
                       (copy-sequence (plist-get resume :queue))
                     (etaf-screensaver--program-round tree rng)))
@@ -222,13 +226,14 @@ This is a visual screensaver, not an operating-system security lock."
       (condition-case problem
           (progn
             (setq session (etaf-screensaver--session-create
-                           item seed (etaf-screensaver--columns (selected-window))
+                           item (+ seed (if resume (plist-get resume :index) 0))
+                           (etaf-screensaver--columns (selected-window))
                            (max 1 (window-body-height)) buffer)
                   owner (etaf-screensaver--presentation-new
                          :session session :frame frame :configuration configuration
                          :origin-buffer origin-buffer
                          :program tree :queue queue :random-state rng :seed seed
-                         :raw-program requested
+                         :configured-seed etaf-screensaver-seed :resumable (null program)
                          :index (if resume (plist-get resume :index) 0)
                          :track-mouse track-mouse
                          :frame-parameters
@@ -261,6 +266,9 @@ This is a visual screensaver, not an operating-system security lock."
                                   (when (eq owner etaf-screensaver--active)
                                     (etaf-screensaver-stop))))))
             (setf (etaf-screensaver--session-runtime session) (etaf-runtime-for-buffer buffer))
+            ;; Mounted metrics may differ from frame defaults used in preflight.
+            (etaf-screensaver--session-render session)
+            (etaf-screensaver--session-publish session)
             (etaf-screensaver--canvas-face owner)
             (message nil)
             (let ((map (make-sparse-keymap)))
@@ -291,14 +299,17 @@ presentation buffer survives.  When automatic mode is enabled, only its
 idle watcher and rearming hook remain, waiting a fresh idle interval."
   (interactive)
   (when-let* ((owner etaf-screensaver--active))
-    ;; Keep the playback position for the next automatic start.
-    (setq etaf-screensaver--resume
-          (list :program (etaf-screensaver--presentation-raw-program owner)
-                :queue (cons (etaf-screensaver--session-item
-                              (etaf-screensaver--presentation-session owner))
-                             (etaf-screensaver--presentation-queue owner))
-                :index (etaf-screensaver--presentation-index owner)
-                :seed (etaf-screensaver--presentation-seed owner)))
+    ;; Explicit previews must not replace the configured program's position.
+    (when (etaf-screensaver--presentation-resumable owner)
+      (setq etaf-screensaver--resume
+            (list :program (copy-tree (etaf-screensaver--presentation-program owner))
+                  :configured-seed (etaf-screensaver--presentation-configured-seed owner)
+                  :queue (cons (etaf-screensaver--session-item
+                                (etaf-screensaver--presentation-session owner))
+                               (etaf-screensaver--presentation-queue owner))
+                  :random-state (cl-make-random-state (etaf-screensaver--presentation-random-state owner))
+                  :index (etaf-screensaver--presentation-index owner)
+                  :seed (etaf-screensaver--presentation-seed owner))))
     ;; Clear ownership first: unmount, buffer death and map teardown can reenter.
     (setq etaf-screensaver--active nil)
     (when (timerp (etaf-screensaver--presentation-timer owner))
@@ -319,6 +330,7 @@ idle watcher and rearming hook remain, waiting a fresh idle interval."
       (unwind-protect
           (when (and runtime (etaf-runtime-mounted-p runtime)) (etaf-unmount runtime))
         (setf (etaf-screensaver--session-runtime session) nil)
+        (etaf-screensaver--session-flush-images session nil)
         (when (frame-live-p frame)
           (with-selected-frame frame
             (when (etaf-screensaver--presentation-frame-parameters owner)
@@ -340,7 +352,10 @@ idle watcher and rearming hook remain, waiting a fresh idle interval."
 The plist contains :active, :automatic and, while active, :scene, :buffer,
 :index (zero-based playlist position), :seed, :ticks, :elapsed, :columns,
 :rows, :frame-rate, :params and :up-next (the remainder of this round).
-The returned parameter alist is a copy; changing it does not configure playback."
+:presentation names the layout; :works lists the simultaneous scene ids and
+:up-next-works lists the works on each remaining page.  :scene remains the
+first work's id.  :duration is this page's dwell time.  Returned lists are
+copies; changing them does not configure playback."
   (let ((owner etaf-screensaver--active))
     (append (list :active (and owner t) :automatic (and etaf-screensaver-mode t))
             (when owner
@@ -351,12 +366,21 @@ The returned parameter alist is a copy; changing it does not configure playback.
                       :seed (etaf-screensaver--session-seed session)
                       :ticks (etaf-screensaver--session-ticks session)
                       :elapsed (etaf-screensaver--session-elapsed session)
-                      :columns (etaf-screensaver--session-columns session)
-                      :rows (etaf-screensaver--session-rows session)
+                      :columns (etaf-screensaver--session-window-columns session)
+                      :rows (etaf-screensaver--session-window-rows session)
                       :frame-rate (plist-get (etaf-screensaver--session-item session) :frame-rate)
+                      :duration (plist-get (etaf-screensaver--session-item session) :duration)
+                      :presentation (plist-get (etaf-screensaver--session-item session) :presentation)
+                      :works (etaf-screensaver--item-works (etaf-screensaver--session-item session))
                       :params (copy-tree (etaf-screensaver--session-params session))
                       :up-next (mapcar (lambda (item) (plist-get item :scene))
-                                       (etaf-screensaver--presentation-queue owner))))))))
+                                       (etaf-screensaver--presentation-queue owner))
+                      :up-next-works (mapcar #'etaf-screensaver--item-works
+                                            (etaf-screensaver--presentation-queue owner))))))))
+
+(defun etaf-screensaver--item-works (item)
+  "Return the independent work identifiers displayed by ITEM."
+  (mapcar (lambda (work) (plist-get work :scene)) (or (plist-get item :tiles) (list item))))
 
 (define-minor-mode etaf-screensaver-mode
   "Toggle automatic, input-dismissed screensavers after Emacs is idle.

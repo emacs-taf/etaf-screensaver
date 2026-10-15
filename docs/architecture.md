@@ -14,7 +14,16 @@ children in order, from shuffled bags or with replacement; nesting composes
 whole sequences. Bounds on depth, group size and round expansion prevent an
 accidental unbounded program from occupying the input thread.
 
-The engine owns one scene's state, random stream, viewport and frame text.
+The engine owns a page's composed frame and the independent scene states,
+random streams and content rectangles within it. The playlist expands finite
+selections first, then groups consecutive mosaic works into pages of at most
+four without crossing pack boundaries. Partial pages do not fabricate works.
+The presentation layout is the single source of content rectangles for both
+callback sizing and composition; a wall is not a sliced single-scene frame.
+Only the parent owns a mounted Runtime. Color-only changes are meaningful:
+publication compares text properties as well as characters.
+
+Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
 width. Composition preserves wide-character continuation cells and merges
 adjacent colors. The expression interpreter evaluates only its whitelist;
@@ -43,10 +52,12 @@ broken spec without disturbing the others.
 
 Text recordings render as canvas rows; image recordings take a second path.
 The `frames` provider returns image file names and a pixel size; the reel
-layer scales each frame to fit the canvas, centers it and crops it per
-character row with a `display` slice, the same retained Host boundary ETAF
-video uses. The engine flushes the previous frame from Emacs's image cache
-after the next one is committed, so long playback keeps one decoded frame.
+layer scales each frame to fit the canvas, centers it on whole character rows and crops it per row with a `display`
+slice, the same retained Host boundary ETAF video uses. A display run reserves
+its full cell footprint, with a fractional-width spacer for pixel rounding;
+neighboring tile borders therefore stay aligned without stretching the image. The engine flushes the previous frame from Emacs's image cache
+after the next one is committed and flushes remaining images on teardown.
+Thus long playback retains only the currently displayed page's decoded frames.
 Baking is a development step (`scripts/bake-canvas-frames.mjs`): it renders
 a browser canvas offline and writes still frames. The application never runs
 a browser, shader or decoder at playback.
@@ -61,8 +72,12 @@ mouse tracking and any toolbar/tab-bar setting it changes. It mounts a
 canvas-only view in an ephemeral buffer, with no mode line, header, cursor or
 interactive scene controls. It does not create or activate a frame.
 
-One single-shot animation timer advances time, selects the next item when its
-duration expires and publishes the next frame. It schedules a successor only
+One single-shot animation timer advances every work's elapsed time, selects
+the next page when its duration expires and publishes the composed frame.
+Scheduling subtracts time already spent rendering from the next frame interval;
+missed deadlines skip waiting rather than replaying a burst of old ticks.
+A mosaic page lasts for its longest work; recorded children follow their own
+timing and loop independently. It schedules a successor only
 if it still owns the active presentation. Scene boundaries and resize update
 reactive view inputs; ordinary animation publishes just retained canvas text.
 If the window disappears, the buffer dies, the frame is deleted or focus is
@@ -81,6 +96,12 @@ frame/window snapshot, unmounts the Runtime and kills the temporary buffer.
 Cleanup runs on failed startup and rendering failure too; an animation failure
 also disables automatic mode and reports its cause instead of retrying in an
 idle error loop.
+
+Configured playback retains its current page, remaining queue, scene seed and
+program random state across dismissal, restarting that page from its beginning
+on wake. It compares a newly compiled effective program and configured seed to
+the saved snapshot before reuse. Changed packs/options/registrations invalidate
+it. Explicit previews do not consume or overwrite that configured position.
 
 ## Automatic idle mode
 

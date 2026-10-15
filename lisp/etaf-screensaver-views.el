@@ -23,7 +23,7 @@
        :wrap-mode 'none :overflow 'hidden
        :background-color
        (progn (etaf-value revision)
-              (plist-get (etaf-screensaver--session-item session) :background))
+              (etaf-screensaver--session-background session))
     (text :ref (etaf-screensaver--session-canvas-ref session)
           :id 'screensaver-canvas
           (expr (etaf-screensaver--session-frame session)))))

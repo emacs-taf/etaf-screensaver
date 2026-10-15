@@ -21,6 +21,75 @@
    :assertions (lambda (context)
                  (list (etaf-gui-verifier-assert id (funcall verify context))))))
 
+(defun etaf-screensaver-gui--presentations ()
+  "Return the real-content viewport matrix and image composition checks."
+  (append
+   (cl-loop for size in '((130 . 46) (90 . 40) (64 . 30) (100 . 16))
+            append
+            (cl-loop for style in '(full card band mosaic)
+                     collect
+                     (let ((size size) (style style))
+                       (etaf-screensaver-gui--action
+                        (format "%s-%dx%d" style (car size) (cdr size))
+                        (lambda (context)
+                          (etaf-screensaver-stop)
+                          (set-frame-size (selected-frame) (car size) (cdr size))
+                          (setf (etaf-gui-verifier-context-target-buffer context)
+                                (etaf-screensaver-start
+                                 (if (eq style 'mosaic)
+                                     '(:pack neon :presentation mosaic :duration 60)
+                                   (list :scene (if (eq style 'card) 'tte-ink-waves 'tte-thunderstorm)
+                                         :presentation style :duration 60)))))
+                        (lambda (_context)
+                          (let ((status (etaf-screensaver-status)))
+                            (and (eq (plist-get status :presentation) style)
+                                 (= (frame-width) (car size)) (= (frame-height) (cdr size))
+                                 (>= (or (plist-get status :ticks) 0) 5)
+                                 (= (or (plist-get status :columns) 0) (1- (window-body-width)))
+                                 (= (or (plist-get status :rows) 0) (window-body-height)))))))))
+   (mapcar
+    (lambda (style)
+      (etaf-screensaver-gui--action
+       (format "image-%s" style)
+       (lambda (context)
+         (etaf-screensaver-stop)
+         (set-frame-size (selected-frame) 90 40)
+         (setf (etaf-gui-verifier-context-target-buffer context)
+               (etaf-screensaver-start
+                (list :presentation style :scenes
+                      '(frames-sample tte-ink-waves tte-synthgrid starfield)))))
+       (lambda (_context)
+         (let ((status (etaf-screensaver-status)))
+           (and (eq (plist-get status :presentation) style)
+                (>= (or (plist-get status :ticks) 0) 3))))))
+    '(full card band mosaic))
+   (list
+    (etaf-screensaver-gui--action
+     "cross-style-round"
+     (lambda (context)
+       (etaf-screensaver-stop)
+       (setf (etaf-gui-verifier-context-target-buffer context)
+             (etaf-screensaver-start
+              '(:scenes ((:scene tte-ink-waves :presentation card :duration 0.3)
+                         (:scene starfield :presentation band :duration 0.3)
+                         (:presentation mosaic :scenes
+                          ((:scene tte-beams :duration 0.3)
+                           (:scene tte-synthgrid :duration 0.3)
+                           (:scene tte-bubbles :duration 0.3)
+                           (:scene tte-thunderstorm :duration 0.3))))))))
+     (lambda (_context)
+       (>= (or (plist-get (etaf-screensaver-status) :index) 0) 6)) 12)
+    (etaf-screensaver-gui--action
+     "natural-recording-round"
+     (lambda (context)
+       (etaf-screensaver-stop)
+       (setf (etaf-gui-verifier-context-target-buffer context)
+             (etaf-screensaver-start
+              '(:scenes ((:scene tte-beams :presentation full)
+                         (:scene tte-ink-waves :presentation card))))))
+     (lambda (_context)
+       (>= (or (plist-get (etaf-screensaver-status) :index) 0) 2)) 120))))
+
 (defun etaf-screensaver-gui--scenario ()
   "Return the presentation-only lifecycle scenario."
   (let (editor original-fullscreen)
@@ -98,10 +167,9 @@
         (lambda (context)
           (etaf-screensaver-stop)
           (let* ((library (file-name-directory (locate-library "etaf-screensaver-loader")))
-                 (fixture (expand-file-name "../tests/fixtures/frames/sample.frames.json" library))
-                 (directory (make-temp-file "etaf-screensaver-frames-" t)))
-            (etaf-screensaver-import-recording fixture directory)
-            (etaf-screensaver-load-scenes (list directory))
+                 (fixture (expand-file-name "../tests/fixtures/frames/sample.frames.json" library)))
+            (etaf-screensaver-register-reel
+             (list :id 'frames-sample :provider 'frames :recording fixture :title "Image fixture"))
             (setf (etaf-gui-verifier-context-target-buffer context)
                   (etaf-screensaver-start 'frames-sample))))
         (lambda (_context)
@@ -119,6 +187,7 @@
                    (= (or (plist-get status :columns) 0) (1- (window-body-width)))
                    (= (or (plist-get status :rows) 0) (window-body-height)))))))
        '((130 . 46) (90 . 40) (64 . 30) (100 . 16)))
+      (etaf-screensaver-gui--presentations)
       (mapcar
        (lambda (event)
          (etaf-screensaver-gui--action

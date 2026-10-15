@@ -35,6 +35,21 @@ Automatic activation avoids an active minibuffer and unfocused or hidden frames.
 The animation adapts to the available character grid; tiny windows clip artwork
 instead of shrinking its characters. No additional Emacs frame is created.
 
+## Presentation
+
+Keep the same works and choose how they appear:
+
+```elisp
+(setq etaf-screensaver-program '(:pack ink)
+      etaf-screensaver-presentation 'card)
+```
+
+`full` fills the canvas, `card` frames a work on a mat, `band` adds a cinema
+strip and clock, and `mosaic` plays up to four independent works concurrently.
+Nil uses each pack's suggested presentation. Item/group overrides allow a
+mixed program. A 64×24 drawable character grid is the recommended minimum;
+narrow walls stack their tiles and smaller windows deliberately clip content.
+
 ## Playback configuration
 
 A program is a scene, a configured scene item, or a group of programs.
@@ -56,8 +71,10 @@ Groups support `sequential`, `shuffle` (each child once per bag) and `random`
 
 The default program rotates four bundled style packs — neon (mesh, beams and
 code flow), space (black holes, lightning, fireworks), ink (dark text on a
-cream page) and ember (warm particles and falling sand) — and each recorded
-work plays its full length before the next one starts.
+cream page) and ember (warm particles and falling sand). Every selected pack's
+works are included. Recordings use their natural duration; a mosaic page holds
+until its longest work ends, looping shorter works. Dismissal remembers the
+current work/page, not an exact frame within it.
 See the [manual](docs/manual.md) for program composition, style packs,
 durations, frame-rate caps, repeatable seeds, custom scene files,
 recorded-animation import and callback authoring. Recordings can be text
@@ -73,8 +90,9 @@ make check          # structure, compilation, public acceptance and API bindings
 make gui SERVER=... # maintained scenario in an owned graphical Emacs server
 ```
 
-The GUI scenario covers scene rendering, resize and native command-loop wake
-routing. Actual automatic activation and physical mouse input require a focused
+The GUI scenario covers scene rendering, all four presentations across wide,
+ordinary, narrow and short windows, text/image composition, cross-style rounds
+and native command-loop wake routing. Actual automatic activation and physical mouse input require a focused
 idle/input pass; background screenshots do not certify that interaction.
 
 From the enclosing workspace, measure autonomous frame cadence with:

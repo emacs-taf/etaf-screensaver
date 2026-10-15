@@ -311,12 +311,17 @@ moving the layout around it."
          ;; below, and a scale derived from the width can round the displayed
          ;; height past the aligned value, so derive the scale from the
          ;; aligned height and let the width follow it.
-         (height (max line-height (* line-height (floor (* source-height fit) line-height))))
+         (height (max 1 (if (< (* source-height fit) line-height)
+                            (floor (* source-height fit))
+                          (* line-height (floor (* source-height fit) line-height)))))
          (scale (/ (float height) source-height))
          (width (max char-width (round (* source-width scale))))
          (offset-x (max 0 (/ (- canvas-width width) 2)))
-         (offset-y (max 0 (/ (- canvas-height height) 2)))
+         (offset-y (* line-height (max 0 (/ (- rows (ceiling height line-height)) 2))))
          (pad (min (1- columns) (max 0 (/ offset-x char-width))))
+         (span (min (- columns pad) (max 1 (ceiling width char-width))))
+         (slack (- (* span char-width) width))
+         (spacer (and (> span 1) (> slack 0)))
          (image (condition-case nil
                     (create-image file nil nil
                                   :scale scale
@@ -330,10 +335,16 @@ moving the layout around it."
                (if (or (< y 0) (>= y height))
                    ""
                  (concat (make-string pad ?\s)
-                         (propertize " " 'display
+                         (propertize (make-string (if spacer (1- span) span) ?\s) 'display
                                      (list (list 'slice 0 y width
                                                  (min line-height (- height y)))
-                                           image))))))))
+                                           image))
+                         ;; Reserve the image's exact cell footprint without
+                         ;; stretching it: the last cell supplies only the
+                         ;; fractional-column slack left by the image width.
+                         (if spacer
+                             (propertize " " 'display (list 'space :width (/ (float slack) char-width)))
+                           "")))))))
 
 (defun etaf-screensaver--reel-text-rows (state context)
   "Return STATE's current text frame fitted into CONTEXT's canvas.
