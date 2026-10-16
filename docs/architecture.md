@@ -103,7 +103,10 @@ The image provider rejects paths leaving the bundle and bounds manifest,
 canvas, frame count and encoded size before import. A canonical bundle root
 and basename-only entries make ordinary asset checks local; symlinks receive
 an additional containment check. Header detection reuses one bounded buffer
-rather than invoking editor buffer-lifecycle hooks for every asset. Format
+rather than invoking editor buffer-lifecycle hooks for every asset. It reads
+64 bytes first and extends unrecognized prefixes to at most 8192 bytes, so
+binary signatures avoid unnecessary reads while long textual headers remain
+supported. File suffixes never substitute for content recognition. Format
 recognition does not depend on the host build's image decoders. Validated
 formats travel with the file names so playback need not reread each header;
 other providers can omit formats and let the reel detect them lazily. A

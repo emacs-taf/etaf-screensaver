@@ -311,6 +311,51 @@
               (etaf-screensaver-stop)))
         (delete-directory directory t)))))
 
+(ert-deftest etaf-screensaver-reel-tests-content-signatures-and-long-headers ()
+  "Imports recognize content, fall back for long headers and revalidate assets."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (make-temp-file "frames-headers-" t))
+           (manifest (expand-file-name "headers.frames.json" directory))
+           (vector-file (expand-file-name "vector.bin" directory))
+           (target (expand-file-name "imported" directory))
+           (rejected (expand-file-name "rejected" directory)))
+      (unwind-protect
+          (progn
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png")
+                       (expand-file-name "png.jpg" directory))
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/large-a.jpg")
+                       (expand-file-name "jpeg.png" directory))
+            (with-temp-file vector-file
+              (insert "<?xml version=\"1.0\"?><!--" (make-string 320 ?\s)
+                      "--><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\">"
+                      "<rect width=\"40\" height=\"20\" fill=\"red\"/></svg>"))
+            (with-temp-file manifest
+              (insert (json-encode '(:version 1 :width 40 :height 20 :frame_rate 10
+                                    :frames ["png.jpg" "jpeg.png" "vector.bin"]))))
+            ;; Fill the normal playback cache before importing the same bundle.
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-headers :provider 'frames :recording manifest))
+            (etaf-screensaver-start '(:scene reel-test-headers :duration 30))
+            (etaf-screensaver-stop)
+            (let ((report (etaf-screensaver-import-recording manifest target)))
+              (should (eq (plist-get report :kind) 'image))
+              (should (= (plist-get report :frame-count) 3))
+              (dolist (name '("png.jpg" "jpeg.png" "vector.bin"))
+                (should (file-regular-p
+                         (expand-file-name (concat "frames-headers/" name) target)))))
+            ;; A valid signature beyond the supported header bound must not
+            ;; trigger an unbounded read or reuse of cached validation.
+            (with-temp-file vector-file
+              (insert "<!--" (make-string 8192 ?\s)
+                      "--><svg xmlns=\"http://www.w3.org/2000/svg\"/>"))
+            (let ((problem (should-error
+                            (etaf-screensaver-import-recording manifest rejected)
+                            :type 'etaf-screensaver-error)))
+              (should (string-match-p "supported image" (cadr problem))))
+            (should-not (file-exists-p rejected)))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
 (ert-deftest etaf-screensaver-reel-tests-rejects-broken-frame-bundles ()
   "Missing frames, non-images and bad JSON signal and write nothing."
   (etaf-screensaver-reel-tests--clean

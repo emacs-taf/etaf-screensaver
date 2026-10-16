@@ -86,11 +86,19 @@ the work."
                   (unless (and (<= size (* 16 1024 1024)) (<= bytes (* 1024 1024 1024)))
                     (etaf-screensaver--fail "Frame bundle exceeds its byte limit: %s" file))))
               (erase-buffer)
-              (insert-file-contents-literally path nil 0 8192)
+              ;; Common binary signatures fit in a short prefix.  Longer
+              ;; textual headers retain the same bounded fallback and all
+              ;; files are still checked by content, never by their suffix.
+              (insert-file-contents-literally path nil 0 64)
               ;; Recognize the format independently of this Emacs build's
               ;; decoders.  Import/validation must also work in emacs-nox.
               (let ((type (or (image-type-from-buffer)
                               (image-type-from-data (buffer-string)))))
+                (when (and (null type) (= (buffer-size) 64))
+                  (goto-char (point-max))
+                  (insert-file-contents-literally path nil 64 8192)
+                  (setq type (or (image-type-from-buffer)
+                                 (image-type-from-data (buffer-string)))))
                 (unless type
                   (etaf-screensaver--fail "Frame file is not a supported image: %s" path))
                 (push type types))))

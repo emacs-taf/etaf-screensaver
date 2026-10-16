@@ -78,7 +78,9 @@
 
 - Image-bundle validation reuses a header buffer and canonical bundle root
   instead of repeating editor-buffer hooks and path traversal for every still.
-  Import revalidates current assets even when its manifest is unchanged.
+  Common image signatures use a short initial read, with a bounded fallback
+  for longer headers. Import revalidates current assets even when its manifest
+  is unchanged; suffixes never replace content checks.
 
 - Image bundle imports reject escaping frame paths and oversized manifests,
   declared canvases, frame lists and encoded image payloads before copying.
