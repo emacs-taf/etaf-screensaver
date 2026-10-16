@@ -179,8 +179,10 @@ jitter do not accumulate into a shifting cadence. Missed grid slots are
 skipped rather than replayed as a burst of old ticks.
 During the last six seconds of a page, the same callback may prepare metadata
 for the next already-queued page. It processes at most one reader and 64
-assets per callback, checking a two-millisecond wall budget before each
-atomic stat/header read; manifest parsing has its own 1 MiB/7200-entry bound.
+assets per callback, using at most six milliseconds of remaining time in
+that frame's first quarter-period. A frame already past that allowance does
+no read-ahead. The reader checks this absolute deadline before each atomic
+stat/header read; manifest parsing has its own 1 MiB/7200-entry bound.
 OS file operations cannot be preempted. Each chunk owns one temporary header
 buffer, with no buffer, timer, process or decoded image retained between
 chunks. It neither expands a new shuffle round nor advances the playlist or

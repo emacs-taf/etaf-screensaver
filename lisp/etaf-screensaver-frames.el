@@ -146,14 +146,14 @@ before its stat/header read.  Reuse one temporary header buffer per chunk."
     (etaf-screensaver--frames-read-step reader)
     (etaf-screensaver--frames-read-result reader)))
 
-(defun etaf-screensaver--frames-prepare-step (preparation)
-  "Advance PREPARATION by at most 64 assets and a two-millisecond budget.
-Manifest parsing is bounded by its own size/count limits.  A single file's
-IO cannot be preempted.  Keep failures for selection, not the current page."
+(defun etaf-screensaver--frames-prepare-step (preparation deadline)
+  "Advance PREPARATION by at most 64 assets before wall-clock DEADLINE.
+The caller budgets spare frame time.  Manifest parsing is bounded by its
+own size/count limits.  A single file's IO cannot be preempted.  Keep
+failures for selection, not the current page."
   (condition-case problem
       (let* ((source (etaf-screensaver--frames-preparation-source preparation))
-             (file (nth 2 source))
-             (deadline (+ (float-time) 0.002)))
+             (file (nth 2 source)))
         (unless (etaf-screensaver--frames-preparation-key preparation)
           (let* ((key (etaf-screensaver--reel-read-cache-key (car source) file))
                  (cached (assoc key etaf-screensaver--reel-read-cache)))

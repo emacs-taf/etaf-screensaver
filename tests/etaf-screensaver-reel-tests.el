@@ -772,7 +772,7 @@
         (delete-directory directory t)))))
 
 (ert-deftest etaf-screensaver-reel-tests-cancel-queued-read-releases-resources ()
-  "Stopping during a large queued read leaves no timer, buffer or partial cache result."
+  "High-rate playback stops a large queued read without leaking resources or partial data."
   (etaf-screensaver-reel-tests--clean
     (let* ((directory (file-truename (make-temp-file "frames-queued-cancel-" t)))
            (manifest (expand-file-name "many.frames.json" directory))
@@ -787,7 +787,7 @@
                    (processes (process-list))
                    (configuration (current-window-configuration))
                    (buffer (etaf-screensaver-start
-                            '(:scenes ((:scene reel-test-current :duration 5)
+                            '(:scenes ((:scene reel-test-current :duration 5 :frame-rate 120)
                                        reel-test-queued-cancel))))
                    ;; Inventory after mount's lazy editor setup, but before
                    ;; the first animation callback can start queued IO.

@@ -151,20 +151,27 @@ background preview must not mistake an unchanged nil focus for a loss."
 Peek only: no scene creation, playlist expansion, RNG advance or extra timer."
   (when (and (etaf-screensaver--presentation-queue owner)
              (<= (- (etaf-screensaver--presentation-deadline owner) now) 6))
-    (unless (etaf-screensaver--presentation-read-ahead owner)
-      (let ((item (car (etaf-screensaver--presentation-queue owner))))
-        (setf (etaf-screensaver--presentation-read-ahead owner)
-              (cons item
-                    (cl-loop for tile in (or (plist-get item :tiles) (list item))
-                             for source = (etaf-screensaver--scene-reel-source
-                                           (plist-get tile :definition))
-                             when source collect
-                             (etaf-screensaver--frames-preparation-new :source source))))))
-    ;; At most one reader/chunk per callback, including a four-work mosaic.
-    (when-let* ((preparation
-                 (cl-find-if-not #'etaf-screensaver--frames-preparation-done
-                                 (cdr (etaf-screensaver--presentation-read-ahead owner)))))
-      (etaf-screensaver--frames-prepare-step preparation))))
+    (let* ((item (etaf-screensaver--session-item
+                  (etaf-screensaver--presentation-session owner)))
+           (deadline (+ now (/ 0.25 (plist-get item :frame-rate)))))
+      ;; Give queued IO only spare time in this frame's first quarter.
+      ;; Expensive rendering or GC must not gain another IO tail.
+      (when (< (float-time) deadline)
+        (unless (etaf-screensaver--presentation-read-ahead owner)
+          (let ((next (car (etaf-screensaver--presentation-queue owner))))
+            (setf (etaf-screensaver--presentation-read-ahead owner)
+                  (cons next
+                        (cl-loop for tile in (or (plist-get next :tiles) (list next))
+                                 for source = (etaf-screensaver--scene-reel-source
+                                               (plist-get tile :definition))
+                                 when source collect
+                                 (etaf-screensaver--frames-preparation-new :source source))))))
+        ;; At most one reader/chunk per callback, including a four-work mosaic.
+        (when-let* ((preparation
+                     (cl-find-if-not #'etaf-screensaver--frames-preparation-done
+                                     (cdr (etaf-screensaver--presentation-read-ahead owner)))))
+          (etaf-screensaver--frames-prepare-step
+           preparation (min deadline (+ (float-time) 0.006))))))))
 
 (defun etaf-screensaver--next (owner now)
   "Select OWNER's next item at wall time NOW."
