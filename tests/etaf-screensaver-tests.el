@@ -324,7 +324,12 @@
                     ((pow 2 3) . 8) ((min 2 1) . 1) ((max 0 1) . 1)
                     ((sqrt 4) . 2) ((float 2) . 2.0) ((floor 2.9) . 2)
                     ((ceiling 2.1) . 3) ((round 2.9) . 3) ((abs -2) . 2)
-                    ((tan 0) . 0) ((+ 1 2 3) . 6) ((/ 12 2 3) . 2)))
+                    ((tan 0) . 0) ((+ 1 2 3) . 6) ((/ 12 2 3) . 2)
+                    ((+ 1e16 1.0 -1e16) . 0.0) ((+ 1e16 1.0 -1e16 1.0) . 1.0)
+                    ((- 20 2 3) . 15) ((- 20 2 3 4) . 11)
+                    ((* 0.5 2 3) . 3.0) ((* 0.5 2 3 4) . 12.0)
+                    ((min 2 1.5 3) . 1.5) ((min 2 1.5 3 -4) . -4)
+                    ((max 2 1.5 3) . 3) ((max 2 1.5 3 4.5) . 4.5)))
       (etaf-screensaver-register-scene
        (list :id 'test-arithmetic
              :layers (list (list :kind 'field :block '(8 8) :ramp "01"
@@ -376,7 +381,10 @@
   (etaf-screensaver-tests--clean
     (etaf-screensaver-register-scene
      '(:id test-field-random :frame-rate 1
-       :layers ((:kind field :value (if (< x 0) (/ 1 0) (rndi 10))
+       :layers ((:kind field :value (if (< x 0) (/ 1 0)
+                                     (mod (- (+ (* 7 (rndi 10))
+                                                (* 3 (rndi 10)) (rndi 10))
+                                             (rndi 10) (* 2 (rndi 10)) (* 4 (rndi 10))) 10))
                        :range (0 10) :ramp "0123456789"))))
     (etaf-screensaver-define-scene test-field-reference
       :frame-rate 1 :create (lambda (_context) nil) :step (lambda (_state _context) nil)
@@ -386,7 +394,15 @@
                   (cl-loop repeat (plist-get context :rows)
                            collect (apply #'string
                                           (cl-loop repeat (plist-get context :columns)
-                                                   collect (+ ?0 (floor (* 10 (funcall random))))))))))
+                                                   collect
+                                                   (let* ((a (floor (* 10 (funcall random))))
+                                                          (b (floor (* 10 (funcall random))))
+                                                          (c (floor (* 10 (funcall random))))
+                                                          (d (floor (* 10 (funcall random))))
+                                                          (e (floor (* 10 (funcall random))))
+                                                          (f (floor (* 10 (funcall random)))))
+                                                     (+ ?0 (mod (- (+ (* 7 a) (* 3 b) c)
+                                                                   d (* 2 e) (* 4 f)) 10)))))))))
     (let ((actual (etaf-screensaver-tests--text (etaf-screensaver-start 'test-field-random))))
       (etaf-screensaver-stop)
       (let* ((expected (etaf-screensaver-tests--text (etaf-screensaver-start 'test-field-reference)))

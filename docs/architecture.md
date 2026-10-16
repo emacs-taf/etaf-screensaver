@@ -59,7 +59,9 @@ adjacent colors. Row projection builds one string, omits continuation cells
 and paints color spans directly instead of joining per-cell or per-color
 strings. The expression interpreter evaluates only its whitelist;
 common unary/binary arithmetic does not allocate an argument list per
-expression. A dense field builds closures over that same whitelist and reuses
+expression. Dense fields also call three- and four-operand arithmetic directly,
+retaining the original operand order and arity rather than reassociating float
+operations. A dense field builds closures over that same whitelist and reuses
 exact subexpression values along invariant spatial/time axes. Its caches and
 coordinate bindings belong to the field and are recreated on resize. Changing
 globals refresh per render; random calls are never cached, and conditional

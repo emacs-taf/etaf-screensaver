@@ -96,7 +96,8 @@
 - Frame scheduling no longer adds render time to every nominal frame interval.
 - Gallery and mosaic playback reuse their static borders and captions rather
   than rebuilding them on every animation tick. Dense fields reuse invariant
-  calculations without reducing their sampling density or changing randomness.
+  calculations and reduce per-cell temporary allocations without reducing
+  sampling density or changing randomness.
 - A manually started background preview survives global focus rechecks; it
   still dismisses when its own frame actually loses focus or receives input.
 - Scenes can draw Unicode symbols and mixed-width text on Emacs 31, including

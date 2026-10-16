@@ -181,6 +181,16 @@ closures over the same whitelist, not executable Lisp from scene data."
                              ('/ (/ (float a) (float b)))
                              ('pow (expt a b))
                              (_ (funcall operator a b))))))
+             ((and (<= 3 (length functions) 4)
+                   (memq operator '(+ - * min max)))
+              ;; Keep one call with the original arity and operand order:
+              ;; folding a variadic expression can change float rounding.
+              (let ((fourth (nth 3 functions)))
+                (if fourth
+                    (lambda () (funcall operator (funcall first) (funcall second)
+                                        (funcall third) (funcall fourth)))
+                  (lambda () (funcall operator (funcall first) (funcall second)
+                                      (funcall third))))))
              (t (lambda () (etaf-screensaver--expr-call
                             operator (mapcar #'funcall functions)))))))
       (cons
