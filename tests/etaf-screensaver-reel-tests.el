@@ -261,6 +261,7 @@
 
 (ert-deftest etaf-screensaver-reel-tests-image-frames-advance ()
   "Baked image frames publish display slices that advance in order."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
       (etaf-screensaver-register-reel
@@ -283,6 +284,7 @@
 
 (ert-deftest etaf-screensaver-reel-tests-imports-frame-bundle ()
   "Importing a frame bundle copies every file and plays the reel."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let* ((directory (make-temp-file "frames-import-" t))
            (source (expand-file-name "sample.frames.json" directory))
@@ -341,6 +343,7 @@
 
 (ert-deftest etaf-screensaver-reel-tests-natural-duration ()
   "A reel with frame count and rate registers its full length as duration."
+  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
       (etaf-screensaver-register-reel
