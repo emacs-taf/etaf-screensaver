@@ -3,6 +3,7 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-presentation-tests-reused-mutable-rows", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Every layout publishes character and subsequent color-only changes when a scene reuses and mutates its own row string."},
     {"name": "etaf-screensaver-reel-tests-queued-frame-errors-are-deferred", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Missing, non-image and escaping next-page assets report only at selection, preserving the current work and releasing the animation on failure."},
     {"name": "etaf-screensaver-reel-tests-queued-manifest-edits-and-snapshots", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Selection revalidates changed manifests, including repaired failures, while retaining the original compiled scene registration."},
     {"name": "etaf-screensaver-reel-tests-queued-mosaic-completes-all-works", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A short outgoing dwell still validates and displays all four incoming image works in order."},

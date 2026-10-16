@@ -365,5 +365,35 @@
           (should-not progress))
         (etaf-screensaver-stop)))))
 
+(ert-deftest etaf-screensaver-presentation-tests-reused-mutable-rows ()
+  "Text and color edits to a reused scene row publish independently in every layout."
+  (etaf-screensaver-presentation-tests--clean
+    (etaf-screensaver-define-scene presentation-mutable
+      :frame-rate 40
+      :create (lambda (context)
+                (propertize (make-string (plist-get context :columns) ?A)
+                            'face '(:foreground "#FF0000")))
+      :step (lambda (state context)
+              (when (= (plist-get context :tick) 1) (aset state 0 ?B))
+              (when (>= (plist-get context :tick) 4)
+                (put-text-property 0 (length state) 'face '(:foreground "#00FF00") state)))
+      :render (lambda (state _context) (list state)))
+    (dolist (style '(full card band mosaic))
+      (let ((buffer (etaf-screensaver-start (list :scene 'presentation-mutable
+                                                 :presentation style))))
+        (etaf-screensaver-presentation-tests--wait
+         (lambda () (string-match-p "BAAA" (etaf-screensaver-presentation-tests--text buffer))))
+        (etaf-screensaver-presentation-tests--wait
+         (lambda ()
+           (with-current-buffer buffer
+             (save-excursion
+               (goto-char (point-min))
+               (search-forward "BAAA")
+               (let ((face (get-text-property (- (point) 4) 'face)))
+                 (cl-some (lambda (spec)
+                            (and (listp spec) (equal (plist-get spec :foreground) "#00FF00")))
+                          (if (keywordp (car-safe face)) (list face) face)))))))
+        (etaf-screensaver-stop)))))
+
 (provide 'etaf-screensaver-presentation-tests)
 ;;; etaf-screensaver-presentation-tests.el ends here

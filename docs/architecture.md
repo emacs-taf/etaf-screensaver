@@ -36,8 +36,14 @@ width comes from a space measured with that run's face, not the default font;
 property boundaries, newlines, existing display objects and composed/invisible
 text are not merged. A fixed space occupies one glyph, so pixel-based clipping
 can cut it without counting its width once per placeholder. This projection
-never changes the logical rows used for composition or reveals. The renderer
-handles one unit per blank run rather than per empty cell. Publication depends
+never changes the logical rows used for composition or reveals. Rows stay
+separate through composition and reveal; projection concatenates their compact
+glyph runs once, without first copying the full character grid and its text
+properties into another string. Publication compares that immutable projected
+string, so a scene can reuse and mutate its own row without aliasing the last
+published snapshot. A page boundary copies outgoing rows before the old scene
+state is released or a new scene is created. The renderer handles one unit
+per blank run rather than per empty cell. Publication depends
 on the Runtime mount, not the Host's painted bounds: a shrink can temporarily
 clip all old glyphs, and the newly fitted frame must still replace them.
 
