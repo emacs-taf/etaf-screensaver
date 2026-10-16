@@ -28,7 +28,9 @@ its rows are split into static fragments and work-row slots. Each animation
 row concatenates these once, without recropping an already placed neighbor's
 text or image runs. Exact-width rows can be reused, but adding page-specific
 faces first copies the source so a recording's
-cached strings do not acquire another presentation's colors.
+cached strings do not acquire another presentation's colors. Short rows only
+append blank cells; fitting a row that already fits does not slice or rebuild
+its text and image runs.
 
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
@@ -55,7 +57,12 @@ playback reads bytes and leaves the recording in its native format.
 
 The reel layer owns provider-independent behavior: per-frame timing from the
 recording, looping, lazy per-frame SGR conversion, wide-character aware
-center fitting and a small cache of recent unchanged reads. Registration
+center fitting and a bounded cache of recent unchanged reads. Up to 32 recent
+recordings share a 48 MiB frame-text and image-path payload budget, rather than
+a per-recording allowance; cache hits refresh recency. Image entries retain
+validated file names, not encoded or decoded images, so a gallery round can
+reuse its metadata without retaining its frames. Changed manifest size or
+modification time triggers a fresh provider read. Registration
 validates metadata and the referenced file but not frames, so an unused reel
 costs only its spec; the first playback verifies frame shape. Importing
 copies a recording beside a `.esr` spec and reports compatibility,

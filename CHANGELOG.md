@@ -59,6 +59,10 @@
 
 ### Fixed
 
+- Repeating gallery rounds reuse validated recording metadata within a shared
+  payload budget. Padding shorter rows preserves their image runs without
+  unnecessary cropping or reconstruction.
+
 - Image-bundle validation reuses a header buffer and canonical bundle root
   instead of repeating editor-buffer hooks and path traversal for every still.
   Import revalidates current assets even when its manifest is unchanged.

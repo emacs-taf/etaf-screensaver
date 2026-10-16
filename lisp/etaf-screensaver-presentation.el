@@ -47,7 +47,12 @@ only the corresponding horizontal slice, rather than displaying the full image
 from a shortened character span.  Reel image runs reserve their cell footprint."
   (cond
    ((zerop width) "")
-   ((and (zerop (or start 0)) (= (string-width text) width)) text)
+   ((and (zerop (or start 0)) (<= (string-width text) width))
+    ;; Padding is not cropping: preserve complete text/image runs without
+    ;; slicing and rebuilding them just to append empty canvas cells.
+    (let ((padding (- width (string-width text))))
+      (if (zerop padding) text
+        (concat text (make-string padding ?\s)))))
    (t
     (let ((start (or start 0)) (position 0) (column 0) pieces)
       (while (and (< position (length text)) (< column (+ start width)))

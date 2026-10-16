@@ -422,5 +422,117 @@
             (should-not (file-exists-p (expand-file-name "escaped" directory))))
         (delete-directory directory t)))))
 
+(defun etaf-screensaver-reel-tests--image-runs (buffer)
+  "Return BUFFER's visible image runs as (ROW COLUMN SPAN SLICE FILE)."
+  (with-current-buffer buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((row 0) runs)
+        (while (< (point) (point-max))
+          (let ((position (point)) (end (line-end-position)))
+            (while (< position end)
+              (let* ((next (next-single-property-change position 'display nil end))
+                     (display (get-text-property position 'display))
+                     (image (car-safe (cdr-safe display))))
+                (when (eq (car-safe image) 'image)
+                  (push (list row (- position (line-beginning-position))
+                              (- next position) (car display) (image-property image :file))
+                        runs))
+                (setq position next))))
+          (cl-incf row)
+          (forward-line 1))
+        (nreverse runs)))))
+
+(defun etaf-screensaver-reel-tests--wait (predicate)
+  "Wait at most three seconds for public PREDICATE."
+  (let ((deadline (+ (float-time) 3)))
+    (while (and (< (float-time) deadline) (not (funcall predicate)))
+      (sleep-for 0.005)))
+  (should (funcall predicate)))
+
+(ert-deftest etaf-screensaver-reel-tests-image-reveal-keeps-margins ()
+  "Image reveals preserve blank margins and moving slices in every layout."
+  (etaf-screensaver-reel-tests--clean
+    (let ((directory (make-temp-file "image-reveal-" t))
+          (etaf-screensaver-transition-duration 0.4))
+      (unwind-protect
+          (progn
+            (dolist (name '(outgoing incoming))
+              (let ((manifest (expand-file-name (format "%s.frames.json" name) directory)))
+                (dolist (frame '(a b))
+                  (copy-file (etaf-screensaver-reel-tests--fixture (format "frames/frame-%s.png" frame))
+                             (expand-file-name (format "%s-%s.png" name frame) directory)))
+                (with-temp-file manifest
+                  (insert (json-encode
+                           (list :version 1 :width 40 :height 20 :frame_rate 20
+                                 :frames (vector (format "%s-a.png" name) (format "%s-b.png" name))))))
+                (etaf-screensaver-register-reel
+                 (list :id (intern (format "reel-test-%s" name)) :provider 'frames
+                       :recording manifest :frame-rate 20 :title (symbol-name name)))))
+            (dolist (style '(full card band mosaic))
+              (let* ((count (if (eq style 'mosaic) 4 1))
+                     (incoming (make-list count '(:scene reel-test-incoming :duration 30)))
+                     (buffer (etaf-screensaver-start
+                              (list :presentation style :scenes
+                                    (append (make-list count '(:scene reel-test-outgoing :duration 0.3))
+                                            incoming))))
+                     (geometry (mapcar (lambda (run) (cl-subseq run 0 4))
+                                       (etaf-screensaver-reel-tests--image-runs buffer))))
+                (should geometry)
+                (etaf-screensaver-reel-tests--wait
+                 (lambda ()
+                   (let ((progress (plist-get (etaf-screensaver-status) :transition-progress)))
+                     (and progress (<= 0.4 progress 0.7)))))
+                (let* ((runs (etaf-screensaver-reel-tests--image-runs buffer))
+                       (mixed-geometry (mapcar (lambda (run) (cl-subseq run 0 4)) runs)))
+                  (should (equal mixed-geometry geometry))
+                  (dolist (name '(outgoing incoming))
+                    (should (cl-some (lambda (run) (string-match-p (symbol-name name) (nth 4 run))) runs))))
+                (etaf-screensaver-reel-tests--wait
+                 (lambda () (null (plist-get (etaf-screensaver-status) :transition-progress))))
+                (let* ((runs (etaf-screensaver-reel-tests--image-runs buffer))
+                       (settled-geometry (mapcar (lambda (run) (cl-subseq run 0 4)) runs)))
+                  (should (equal settled-geometry geometry))
+                  (should (cl-every (lambda (run) (string-match-p "incoming" (nth 4 run))) runs))
+                  (etaf-screensaver-reel-tests--wait
+                   (lambda () (not (equal runs (etaf-screensaver-reel-tests--image-runs buffer))))))
+                (let ((columns (plist-get (etaf-screensaver-status) :columns)))
+                  (dolist (row (split-string (string-remove-suffix "\n" (etaf-screensaver-reel-tests--text buffer)) "\n"))
+                    (should (= (string-width row) columns))))
+                (etaf-screensaver-stop)
+                (let* ((direct (etaf-screensaver-start (list :presentation style :scenes incoming)))
+                       (direct-geometry (mapcar (lambda (run) (cl-subseq run 0 4))
+                                                (etaf-screensaver-reel-tests--image-runs direct))))
+                  (should (equal direct-geometry geometry)))
+                (etaf-screensaver-stop))))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-replay-observes-recording-edits ()
+  "Replaying a changed recording publishes its new content, not a cached frame."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file)))
+      (unwind-protect
+          (progn
+            (etaf-screensaver-define-reel-provider
+             'reel-test-edit :title "Editable recording" :license "Test license"
+             :extensions '("testreel") :match (lambda (path) (equal path file))
+             :read (lambda (path)
+                     (with-temp-buffer
+                       (insert-file-contents path)
+                       (list :width 40 :height 1 :frame-rate 20
+                             :frames (vector (buffer-substring-no-properties (point-min) (point-max)))))))
+            (with-temp-file file (insert "Original"))
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-edit :provider 'reel-test-edit :recording file))
+            (dolist (text '("Original" "Original" "Changed recording" "Changed recording"))
+              (unless (equal text "Original")
+                (with-temp-file file (insert text)))
+              (let* ((buffer (etaf-screensaver-start 'reel-test-edit))
+                     (visible (etaf-screensaver-reel-tests--text buffer)))
+                (should (string-match-p text visible)))
+              (etaf-screensaver-stop)))
+        (delete-file file)))))
+
 (provide 'etaf-screensaver-reel-tests)
 ;;; etaf-screensaver-reel-tests.el ends here

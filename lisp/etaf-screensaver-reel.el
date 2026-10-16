@@ -79,17 +79,17 @@ disturbing imported reels."
     :duration :frame-count :source :license :background)
   "Keys accepted in a reel spec.")
 
-(defconst etaf-screensaver--reel-read-cache-limit 2
-  "Number of unchanged recordings a session keeps for instant replay.")
+(defconst etaf-screensaver--reel-read-cache-limit 32
+  "Maximum recent recordings retained for replay, subject to a shared budget.")
 
-(defconst etaf-screensaver--reel-read-cache-chars (* 48 1024 1024)
-  "Largest recording, in frame characters, stored in the read cache.")
+(defconst etaf-screensaver--reel-read-cache-bytes (* 48 1024 1024)
+  "Combined frame-text and image-path byte budget of the read cache.")
 
 (defvar etaf-screensaver--reel-read-cache nil
-  "Most recent provider reads as (KEY . DATA) pairs, newest first.
+  "Recent provider reads as (KEY SIZE DATA) entries, most recently used first.
 KEY identifies the provider, file and its size and modification time, so an
-edited recording is read again.  The cache bounds how much recording text a
-session retains; a larger recording is read again for every playback.")
+edited recording is read again.  SIZE counts frame-text and image-path bytes,
+not decoded images.  The shared budget bounds their aggregate retention.")
 
 (defun etaf-screensaver--reel-read-cache-key (provider-id file)
   "Return the read-cache key of FILE read through PROVIDER-ID."
@@ -99,29 +99,39 @@ session retains; a larger recording is read again for every playback.")
           (float-time (file-attribute-modification-time attributes)))))
 
 (defun etaf-screensaver--reel-data-size (data)
-  "Return DATA's frame text size in characters."
-  (let ((frames (plist-get data :frames)) (total 0))
-    (when (vectorp frames)
-      (dotimes (index (length frames))
-        (cl-incf total (length (aref frames index)))))
+  "Return DATA's frame-text and image-path payload size in bytes."
+  (let ((total 0))
+    (dolist (key '(:frames :image-frames))
+      (let ((frames (plist-get data key)))
+        (when (vectorp frames)
+          (dotimes (index (length frames))
+            (cl-incf total (string-bytes (aref frames index)))))))
     total))
 
 (defun etaf-screensaver--reel-read (provider-id provider file)
   "Read FILE through PROVIDER, reusing a recent unchanged result.
-Read errors are not cached.  Only recordings whose frame text fits the cache
-budget are retained, newest first."
+Read errors are not cached.  Recent recordings share one payload budget;
+image manifests retain paths only, never decoded frames."
   (let* ((key (etaf-screensaver--reel-read-cache-key provider-id file))
          (cached (assoc key etaf-screensaver--reel-read-cache)))
-    (or (cdr cached)
-        (let ((data (funcall (plist-get provider :read) file)))
-          (when (<= (etaf-screensaver--reel-data-size data)
-                    etaf-screensaver--reel-read-cache-chars)
-            (setq etaf-screensaver--reel-read-cache
-                  (cons (cons key data)
-                        (cl-subseq etaf-screensaver--reel-read-cache
-                                   0 (min (1- etaf-screensaver--reel-read-cache-limit)
-                                          (length etaf-screensaver--reel-read-cache))))))
-          data))))
+    (if cached
+        (progn
+          (setq etaf-screensaver--reel-read-cache
+                (cons cached (delq cached etaf-screensaver--reel-read-cache)))
+          (nth 2 cached))
+      (let* ((data (funcall (plist-get provider :read) file))
+             (size (etaf-screensaver--reel-data-size data)))
+        (when (<= size etaf-screensaver--reel-read-cache-bytes)
+          (let ((remaining etaf-screensaver--reel-read-cache-bytes)
+                (count 0) kept)
+            (dolist (entry (cons (list key size data) etaf-screensaver--reel-read-cache))
+              (when (and (< count etaf-screensaver--reel-read-cache-limit)
+                         (<= (nth 1 entry) remaining))
+                (cl-incf count)
+                (cl-decf remaining (nth 1 entry))
+                (push entry kept)))
+            (setq etaf-screensaver--reel-read-cache (nreverse kept))))
+        data))))
 
 (defun etaf-screensaver--reel-file (recording)
   "Return RECORDING as an absolute file name.
