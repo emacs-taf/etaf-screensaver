@@ -89,7 +89,8 @@ the work."
               (insert-file-contents-literally path nil 0 8192)
               ;; Recognize the format independently of this Emacs build's
               ;; decoders.  Import/validation must also work in emacs-nox.
-              (let ((type (image-type-from-data (buffer-string))))
+              (let ((type (or (image-type-from-buffer)
+                              (image-type-from-data (buffer-string)))))
                 (unless type
                   (etaf-screensaver--fail "Frame file is not a supported image: %s" path))
                 (push type types))))
