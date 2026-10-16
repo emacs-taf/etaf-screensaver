@@ -3,6 +3,7 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-reel-tests-provider-image-formats", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Image providers publish declared or detected formats and reject malformed format vectors before takeover."},
     {"name": "etaf-screensaver-reel-tests-image-reveal-keeps-margins", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "All layouts retain image slice geometry and empty margins during reveal, remove outgoing images, and keep the incoming recording moving."},
     {"name": "etaf-screensaver-reel-tests-replay-observes-recording-edits", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Replaying a modified recording shows its new content while unchanged replays remain correct."},
     {"name": "etaf-screensaver-presentation-tests-progressive-reveal", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Every layout progressively reveals a moving new page, retaining the outgoing colors and exact row geometry."},

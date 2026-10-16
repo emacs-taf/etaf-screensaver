@@ -91,7 +91,12 @@ The image provider rejects paths leaving the bundle and bounds manifest,
 canvas, frame count and encoded size before import. A canonical bundle root
 and basename-only entries make ordinary asset checks local; symlinks receive
 an additional containment check. Header detection reuses one bounded buffer
-rather than invoking editor buffer-lifecycle hooks for every asset. Import
+rather than invoking editor buffer-lifecycle hooks for every asset. Format
+recognition does not depend on the host build's image decoders. Validated
+formats travel with the file names so playback need not reread each header;
+other providers can omit formats and let the reel detect them lazily. A
+headless projection retains ordinary image descriptors without decoding;
+graphical playback rejects a format when its decoder is unavailable. Import
 always rereads the provider instead of trusting the playback cache: a frame
 or symlink can change without changing the manifest. It is not a decoder
 sandbox. The application never runs a browser, shader or external decoder at

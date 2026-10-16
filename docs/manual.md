@@ -558,7 +558,11 @@ A reel does not have to be text. The built-in `frames` provider reads a
 baked bundle — a JSON manifest plus still frames — and plays it as images.
 Use it for renderers Emacs cannot run: MilkDrop (butterchurn), shader
 previews or p5.js sketches. Baking happens offline; playback only decodes
-images.
+images. Import and header validation do not require graphical support.
+Headless buffers retain image descriptors for composition checks, but visible
+image playback requires a graphical Emacs with the corresponding decoders.
+An image provider can return `:image-types`, one format symbol per file,
+to reuse its validated header results; otherwise formats are detected lazily.
 
 `scripts/bake-canvas-frames.mjs` produces a bundle. For Butterchurn presets
 it needs `npm install butterchurn butterchurn-presets` somewhere (pass

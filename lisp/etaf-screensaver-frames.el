@@ -65,7 +65,7 @@ the work."
         (let* ((directory (file-name-as-directory
                            (file-truename (file-name-directory (expand-file-name file)))))
                (paths (mapcar (lambda (name) (expand-file-name name directory)) names))
-               (bytes 0))
+               (bytes 0) types)
           ;; Names have already been restricted to basenames.  Canonicalize
           ;; the directory once; only symlinks can leave it.  Reuse one header
           ;; buffer instead of running buffer lifecycle hooks for every image.
@@ -87,9 +87,14 @@ the work."
                     (etaf-screensaver--fail "Frame bundle exceeds its byte limit: %s" file))))
               (erase-buffer)
               (insert-file-contents-literally path nil 0 8192)
-              (unless (image-type-from-buffer)
-                (etaf-screensaver--fail "Frame file is not a supported image: %s" path))))
+              ;; Recognize the format independently of this Emacs build's
+              ;; decoders.  Import/validation must also work in emacs-nox.
+              (let ((type (image-type-from-data (buffer-string))))
+                (unless type
+                  (etaf-screensaver--fail "Frame file is not a supported image: %s" path))
+                (push type types))))
           (list :image-frames (vconcat paths)
+                :image-types (vconcat (nreverse types))
                 :image-size (cons width height)
                 :frame-rate frame-rate
                 :source (or (plist-get manifest :source)

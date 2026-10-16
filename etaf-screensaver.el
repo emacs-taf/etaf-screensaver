@@ -117,8 +117,9 @@
 ;; recognizing the format and :read (lambda (file)) returning the recording
 ;; as text frames (:width, :height, :frames, optional :durations seconds
 ;; per frame and :ansi for SGR runs) or image frames (:image-frames of
-;; image file names, optional :image-size); both carry :frame-rate and may
-;; add :source, :license and :assets (every file of a multi-file
+;; image file names, optional :image-size and :image-types, a same-length
+;; vector of image format symbols). Formats omitted by a provider are detected
+;; lazily once per file. Both kinds carry :frame-rate and may add :source, :license and :assets (every file of a multi-file
 ;; recording).  Re-registering an ID replaces it in place.  The built-in
 ;; `tte' provider reads Terminal Text Effects recordings and the `frames'
 ;; provider reads baked image-frame manifests, both without running any
@@ -126,7 +127,9 @@
 ;; 1–120 fps, dimensions up to 2048 per axis and 2073600 declared pixels.
 ;; Encoded images are bounded to 16 MiB each and 1 GiB total; paths and
 ;; symlinks may not escape the bundle. Import trusted images: these bounds
-;; do not sandbox Emacs's image decoder.
+;; do not sandbox Emacs's image decoder. Header validation and import also work
+;; without image decoders. A headless buffer can publish image descriptors;
+;; visible graphical playback requires a decoder for each format.
 ;;
 ;; Function: etaf-screensaver-register-reel (spec)
 ;;;###autoload (autoload 'etaf-screensaver-register-reel "etaf-screensaver" nil nil)

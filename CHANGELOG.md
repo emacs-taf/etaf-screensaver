@@ -59,6 +59,11 @@
 
 ### Fixed
 
+- Image-bundle imports recognize file headers even in a headless Emacs build.
+  Image composition remains testable without decoding pixels; graphical
+  playback still checks decoder support. Validated formats are reused during
+  playback instead of reopening each still to redetect its type.
+
 - Repeating gallery rounds reuse validated recording metadata within a shared
   payload budget. Padding shorter rows preserves their image runs without
   unnecessary cropping or reconstruction.

@@ -261,7 +261,6 @@
 
 (ert-deftest etaf-screensaver-reel-tests-image-frames-advance ()
   "Baked image frames publish display slices that advance in order."
-  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
       (etaf-screensaver-register-reel
@@ -284,7 +283,6 @@
 
 (ert-deftest etaf-screensaver-reel-tests-imports-frame-bundle ()
   "Importing a frame bundle copies every file and plays the reel."
-  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let* ((directory (make-temp-file "frames-import-" t))
            (source (expand-file-name "sample.frames.json" directory))
@@ -377,7 +375,6 @@
 
 (ert-deftest etaf-screensaver-reel-tests-natural-duration ()
   "A reel with frame count and rate registers its full length as duration."
-  (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
   (etaf-screensaver-reel-tests--clean
     (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
       (etaf-screensaver-register-reel
@@ -532,6 +529,30 @@
                      (visible (etaf-screensaver-reel-tests--text buffer)))
                 (should (string-match-p text visible)))
               (etaf-screensaver-stop)))
+        (delete-file file)))))
+
+(ert-deftest etaf-screensaver-reel-tests-provider-image-formats ()
+  "Image providers may supply formats or omit them; malformed vectors fail."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file)) (index 0))
+      (unwind-protect
+          (dolist (types '(nil [png png] [png] ["png" "png"] [png nil]))
+            (let* ((id (intern (format "reel-test-formats-%d" (cl-incf index))))
+                   (frames (vector (etaf-screensaver-reel-tests--fixture "frames/frame-a.png")
+                                   (etaf-screensaver-reel-tests--fixture "frames/frame-b.png"))))
+              (etaf-screensaver-define-reel-provider
+               id :title "Image formats" :license "Test license" :extensions '("testreel")
+               :match (lambda (path) (equal path file))
+               :read (lambda (_path) (list :image-frames frames :image-size '(40 . 20)
+                                          :image-types types :frame-rate 20)))
+              (etaf-screensaver-register-reel (list :id id :provider id :recording file))
+              (if (> index 2)
+                  (should-error (etaf-screensaver-start id) :type 'etaf-screensaver-error)
+                (let* ((buffer (etaf-screensaver-start id))
+                       (visible (etaf-screensaver-reel-tests--display-image buffer)))
+                  (should (equal visible (aref frames 0))))
+                (etaf-screensaver-stop))))
+        (etaf-screensaver-stop)
         (delete-file file)))))
 
 (provide 'etaf-screensaver-reel-tests)

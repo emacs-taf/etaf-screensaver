@@ -32,8 +32,9 @@ path and returns a plist with :frame-rate (positive number), :frames (a
 nonempty vector of text frame strings) or :image-frames (a nonempty vector
 of image file names), :width and :height (positive cell dimensions, text
 frames) or :image-size (a (WIDTH . HEIGHT) pixel pair, optional for image
-frames), plus optional :durations (seconds per frame), :ansi (frame text
-carries SGR runs), :source (a short display description), :license (the
+frames), optional :image-types (same-length vector of format symbols, otherwise
+lazily detected), plus optional :durations (seconds per frame), :ansi
+(frame text carries SGR runs), :source (a short display description), :license (the
 recording's own licence), :assets (every file that belongs to the
 recording, for import) and :colors/:attributes.")
 
@@ -296,6 +297,19 @@ size is read from the first frame that needs it and cached."
         (aset (plist-get state :image-sizes) index size)
         size)))
 
+(defun etaf-screensaver--reel-image-type (state index)
+  "Return STATE's image format at INDEX, detecting it once if not supplied."
+  (or (aref (plist-get state :image-types) index)
+      (let* ((file (aref (plist-get state :image-frames) index))
+             (type (with-temp-buffer
+                     (set-buffer-multibyte nil)
+                     (insert-file-contents-literally file nil 0 8192)
+                     (image-type-from-data (buffer-string)))))
+        (unless type
+          (etaf-screensaver--fail "Reel image format is not recognized: %s" file))
+        (aset (plist-get state :image-types) index type)
+        type)))
+
 (defun etaf-screensaver--reel-image-rows (state context)
   "Return STATE's current image frame as centered canvas rows.
 The image is scaled to fit inside the canvas, centered both ways and cropped
@@ -332,13 +346,16 @@ moving the layout around it."
          (span (min (- columns pad) (max 1 (ceiling width char-width))))
          (slack (- (* span char-width) width))
          (spacer (and (> span 1) (> slack 0)))
-         (image (condition-case nil
-                    (create-image file nil nil
-                                  :scale scale
-                                  :max-width width :max-height height
-                                  :ascent ascent)
-                  (error (etaf-screensaver--fail
-                          "Reel image frame is not readable: %s" file)))))
+         (type (etaf-screensaver--reel-image-type state index))
+         (properties (list :scale scale :max-width width :max-height height :ascent ascent))
+         (image
+          (if (image-type-available-p type)
+              (apply #'create-image file type nil properties)
+            (if (display-graphic-p)
+                (etaf-screensaver--fail "No image decoder for %s: %s" type file)
+              ;; A headless projection can retain standard image descriptors
+              ;; without decoding pixels; the public buffer remains testable.
+              (append (list 'image :type type :file file) properties)))))
     (cl-loop for row below rows
              collect
              (let ((y (- (* row line-height) offset-y)))
@@ -418,6 +435,7 @@ A scene duration shorter than the recording loops it from the start."
     (let* ((width (plist-get data :width))
            (height (plist-get data :height))
            (images (plist-get data :image-frames))
+           (types (plist-get data :image-types))
            (frames (plist-get data :frames))
            (count (if (vectorp images) (length images)
                     (and (vectorp frames) (length frames))))
@@ -436,6 +454,10 @@ A scene duration shorter than the recording loops it from the start."
           (progn
             (unless (cl-every #'stringp images)
               (etaf-screensaver--fail "Reel %s reports a non-file image frame" id))
+            (when types
+              (unless (and (vectorp types) (= (length types) count)
+                           (cl-every (lambda (type) (and type (symbolp type))) types))
+                (etaf-screensaver--fail "Reel %s reports invalid image formats" id)))
             (let ((size (plist-get data :image-size)))
               (when size
                 (unless (and (consp size)
@@ -444,6 +466,7 @@ A scene duration shorter than the recording loops it from the start."
                   (etaf-screensaver--fail "Reel %s reports an invalid image size" id))))
             (list :kind 'image :image-frames images :image-size (plist-get data :image-size)
                   :image-sizes (make-vector count nil)
+                  :image-types (if types (copy-sequence types) (make-vector count nil))
                   :durations durations :index 0 :clock 0.0))
         (progn
           (unless (and (integerp width) (<= 1 width 4096)
