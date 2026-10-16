@@ -98,7 +98,10 @@
           (should (string-match-p (concat label " 中 00[2-9]") text)))
         (should-not (string-match-p "FIVE" text)))
       (etaf-screensaver-presentation-tests--wait
-       (lambda () (eq (plist-get (etaf-screensaver-status) :scene) 'presentation-five)))
+       (lambda ()
+         (let ((status (etaf-screensaver-status)))
+           (and (eq (plist-get status :scene) 'presentation-five)
+                (null (plist-get status :transition-progress))))))
       (let ((text (etaf-screensaver-presentation-tests--text buffer))
             (works (plist-get (etaf-screensaver-status) :works)))
         (should (equal works '(presentation-five)))
@@ -208,6 +211,99 @@
                                      :background "#F4F1EA"))
         (let ((face (get-text-property 0 'face source-row)))
           (should (equal face '(:foreground "#559977"))))
+        (etaf-screensaver-stop)))))
+
+(etaf-screensaver-define-scene presentation-reveal-old
+  :title "Outgoing" :background "#F3F0E8" :frame-rate 40
+  :create (lambda (_context) nil) :step (lambda (_state _context) nil)
+  :render (lambda (_state context)
+            (make-list (plist-get context :rows)
+                       (make-string (plist-get context :columns) ?O))))
+
+(etaf-screensaver-define-scene presentation-reveal-new
+  :title "Incoming" :background "#071018" :frame-rate 40
+  :create (lambda (_context) nil) :step (lambda (_state _context) nil)
+  :render (lambda (_state context)
+            (make-list (plist-get context :rows)
+                       (concat (make-string (max 0 (- (plist-get context :columns) 4)) ?N)
+                               (format "%04d" (plist-get context :tick))))))
+
+(ert-deftest etaf-screensaver-presentation-tests-progressive-reveal ()
+  "All layouts reveal a live incoming page while preserving outgoing colors."
+  (etaf-screensaver-presentation-tests--clean
+    (let ((etaf-screensaver-transition-duration 0.4))
+      (dolist (style '(full card band mosaic))
+        (let ((buffer (etaf-screensaver-start
+                       (list :presentation style :scenes
+                             (append
+                              (make-list (if (eq style 'mosaic) 4 1)
+                                         '(:scene presentation-reveal-old :duration 0.08))
+                              (make-list (if (eq style 'mosaic) 4 1)
+                                         '(:scene presentation-reveal-new :duration 3)))))))
+          (etaf-screensaver-presentation-tests--wait
+           (lambda ()
+             (let ((progress (plist-get (etaf-screensaver-status) :transition-progress)))
+               (and progress (<= 0.4 progress 0.7)))))
+          (let ((text (etaf-screensaver-presentation-tests--text buffer)))
+            (should (string-match-p "NNNN" text))
+            (should (string-match-p "OOOO" text)))
+          (with-current-buffer buffer
+            (save-excursion
+              (goto-char (point-min))
+              (search-forward "OOOO")
+              (let* ((face (get-text-property (1- (point)) 'face))
+                     (specs (if (keywordp (car-safe face)) (list face) face)))
+                (should (cl-some (lambda (spec)
+                                   (and (listp spec)
+                                        (equal (plist-get spec :background) "#F3F0E8"))) specs)))))
+          (etaf-screensaver-presentation-tests--wait
+           (lambda () (null (plist-get (etaf-screensaver-status) :transition-progress))))
+          (let ((text (etaf-screensaver-presentation-tests--text buffer))
+                (status (etaf-screensaver-status)))
+            (should (string-match-p "NNNN" text))
+            (should-not (string-match-p "OOOO" text))
+            (should (> (plist-get status :ticks) 5))
+            (dolist (row (split-string (string-remove-suffix "\n" text) "\n"))
+              (should (= (string-width row) (plist-get status :columns))))))
+        (etaf-screensaver-stop)))))
+
+(ert-deftest etaf-screensaver-presentation-tests-reveal-wake-and-options ()
+  "Wake during a reveal consumes input and releases resources; bad options roll back."
+  (etaf-screensaver-presentation-tests--clean
+    (save-window-excursion
+      (with-temp-buffer
+        (switch-to-buffer (current-buffer))
+        (let ((editor (current-buffer)) (timers (copy-sequence timer-list))
+              (etaf-screensaver-transition-duration 0.4))
+          (etaf-screensaver-start
+           '(:scenes ((:scene presentation-reveal-old :duration 0.08)
+                      (:scene presentation-reveal-new :duration 3))))
+          (etaf-screensaver-presentation-tests--wait
+           (lambda () (numberp (plist-get (etaf-screensaver-status) :transition-progress))))
+          (execute-kbd-macro "x")
+          (let ((active (plist-get (etaf-screensaver-status) :active))
+                (remaining (cl-set-difference timer-list timers)))
+            (should-not active)
+            (should-not remaining)
+            (should (eq (window-buffer) editor))
+            (should (= (buffer-size editor) 0))))))
+    (dolist (value '(-1 6 "slow"))
+      (let ((etaf-screensaver-transition-duration value))
+        (should-error (etaf-screensaver-start 'presentation-one)
+                      :type 'etaf-screensaver-error)))))
+
+(ert-deftest etaf-screensaver-presentation-tests-reveal-disabled-and-repeat ()
+  "Zero disables reveals, and a repeated identical page never flashes a transition."
+  (etaf-screensaver-presentation-tests--clean
+    (dolist (case '((0 . (:scenes ((:scene presentation-reveal-old :duration 0.08)
+                                  (:scene presentation-reveal-new :duration 3))))
+                    (1.2 . (:scene presentation-reveal-old :duration 0.08))))
+      (let ((etaf-screensaver-transition-duration (car case)))
+        (etaf-screensaver-start (cdr case))
+        (etaf-screensaver-presentation-tests--wait
+         (lambda () (> (plist-get (etaf-screensaver-status) :index) 0)))
+        (let ((progress (plist-get (etaf-screensaver-status) :transition-progress)))
+          (should-not progress))
         (etaf-screensaver-stop)))))
 
 (provide 'etaf-screensaver-presentation-tests)

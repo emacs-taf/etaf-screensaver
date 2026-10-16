@@ -47,7 +47,9 @@ Keep the same works and choose how they appear:
 `full` fills the canvas, `card` frames a work on a mat, `band` adds a cinema
 strip and clock, and `mosaic` plays up to four independent works concurrently.
 Nil uses each pack's suggested presentation. Item/group overrides allow a
-mixed program. A 64×24 drawable character grid is the recommended minimum;
+mixed program. Different pages reveal progressively without a whole-canvas color cut;
+`etaf-screensaver-transition-duration` controls the duration independently.
+A 64×24 drawable character grid is the recommended minimum;
 narrow walls stack their tiles and smaller windows deliberately clip content.
 
 ## Playback configuration
@@ -96,6 +98,7 @@ The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 make check          # structure, compilation, public APIs and offline CLI contracts
 make gui SERVER=... # maintained scenario in an owned graphical Emacs server
 make gui-gallery SERVER=... # review the installed gallery and viewport matrix
+make gui-transition SERVER=... # one natural 24-second day-to-night change
 ```
 
 The GUI scenario covers scene rendering, all four presentations across wide,

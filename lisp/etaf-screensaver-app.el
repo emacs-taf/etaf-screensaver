@@ -34,7 +34,7 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program configured-seed resumable queue random-state seed index deadline last-time focus)
+  program configured-seed resumable queue random-state seed index deadline last-time focus transition-duration)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
@@ -155,7 +155,8 @@ background preview must not mistake an unchanged nil focus for a loss."
     (cl-incf (etaf-screensaver--presentation-index owner))
     (etaf-screensaver--session-select
      (etaf-screensaver--presentation-session owner) item
-     (+ (etaf-screensaver--presentation-seed owner) (etaf-screensaver--presentation-index owner)))
+     (+ (etaf-screensaver--presentation-seed owner) (etaf-screensaver--presentation-index owner))
+     (etaf-screensaver--presentation-transition-duration owner))
     (etaf-screensaver--canvas-face owner)
     (setf (etaf-screensaver--presentation-deadline owner) (+ now (plist-get item :duration)))))
 
@@ -239,6 +240,7 @@ This is a visual screensaver, not an operating-system security lock."
                          :focus (frame-focus-state frame) :origin-buffer origin-buffer
                          :program tree :queue queue :random-state rng :seed seed
                          :configured-seed etaf-screensaver-seed :resumable (null program)
+                         :transition-duration etaf-screensaver-transition-duration
                          :index (if resume (plist-get resume :index) 0)
                          :track-mouse track-mouse
                          :frame-parameters
@@ -359,8 +361,9 @@ The plist contains :active, :automatic and, while active, :scene, :buffer,
 :rows, :frame-rate, :params and :up-next (the remainder of this round).
 :presentation names the layout; :works lists the simultaneous scene ids and
 :up-next-works lists the works on each remaining page.  :scene remains the
-first work's id.  :duration is this page's dwell time.  Returned lists are
-copies; changing them does not configure playback."
+first work's id.  :duration is this page's dwell time.  :transition-progress
+is nil outside a reveal, otherwise its elapsed fraction from zero to one.
+Returned lists are copies; changing them does not configure playback."
   (let ((owner etaf-screensaver--active))
     (append (list :active (and owner t) :automatic (and etaf-screensaver-mode t))
             (when owner
@@ -375,6 +378,10 @@ copies; changing them does not configure playback."
                       :rows (etaf-screensaver--session-window-rows session)
                       :frame-rate (plist-get (etaf-screensaver--session-item session) :frame-rate)
                       :duration (plist-get (etaf-screensaver--session-item session) :duration)
+                      :transition-progress
+                      (when (etaf-screensaver--session-previous-rows session)
+                        (/ (etaf-screensaver--session-elapsed session)
+                           (etaf-screensaver--session-transition-duration session)))
                       :presentation (plist-get (etaf-screensaver--session-item session) :presentation)
                       :works (etaf-screensaver--item-works (etaf-screensaver--session-item session))
                       :params (copy-tree (etaf-screensaver--session-params session))

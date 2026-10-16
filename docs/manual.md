@@ -105,6 +105,25 @@ failure tears down the presentation, reports its cause and disables automatic
 mode to prevent repeated idle errors. Correct the configuration or scene,
 then enable the mode again.
 
+### Between works
+
+Different pages use a 1.2-second, eased top-to-bottom reveal instead of a
+whole-canvas hard cut. The outgoing page keeps its original colors; the
+incoming work continues moving. This reuses native image slices and text,
+not browser rendering or per-frame image encoding.
+
+```elisp
+(setq etaf-screensaver-transition-duration 1.2) ; 0 disables; maximum 5 seconds
+```
+
+The reveal does not change content, layout, order or dwell time. It occupies
+at most half of the incoming page's duration. An identical repeated page has
+no transition; resizing finishes a reveal immediately. Status reports
+`:transition-progress` while revealing. Wake input remains active throughout.
+This is a spatial reveal, not an alpha crossfade. A reel's baked loop blend
+is a separate operation. Neither removes flashing already present in a work;
+avoid very short programs alternating light and dark pages.
+
 ## Style packs and playback strategies
 
 A style pack is a named list of scenes that share one visual language, with
@@ -643,7 +662,8 @@ not part of the source checkout.
 The default bake records 26 seconds at 15 fps and crossfades its last two
 seconds into its first two. It omits those leading two seconds, producing a
 24-second moving loop whose last and first frames are neighboring motion.
-This smooths a reel's loop, not transitions between different works. Baked
+This smooths a reel's own loop. The playback reveal described above handles
+changes between different works separately. Baked
 files still require visual review for motion, exposure, flash and the seam;
 a completed bake is not a quality certification.
 
@@ -674,6 +694,15 @@ for ordinary scenes; callbacks are the escape hatch for algorithms the spec
 language cannot express.
 
 ## Performance notes
+
+The optional `etaf-screensaver.gallery.*` performance scenarios require the
+full-size installed gallery (or `ETAF_SCREENSAVER_GALLERY` pointing to its
+directory). They measure real 360-frame bundles, concurrent works and page
+boundaries, not the two-frame repository fixture. GUI boundary/reveal runs
+keep the natural 24-second dwell; pass `--timeout 40` for preparation. Short
+stress cycles run only in batch mode, never as visible light/dark flashing.
+`make gui-transition SERVER=...` captures one normal-length day-to-night
+change and wake, then stops; inspect those captures separately from timing.
 
 - Quantize palettes and merge adjacent color runs; arbitrary per-cell colors
   cost more to publish than coherent runs.

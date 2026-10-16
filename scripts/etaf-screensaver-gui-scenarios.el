@@ -70,15 +70,12 @@
        (etaf-screensaver-stop)
        (setf (etaf-gui-verifier-context-target-buffer context)
              (etaf-screensaver-start
-              '(:scenes ((:scene tte-ink-waves :presentation card :duration 0.3)
-                         (:scene starfield :presentation band :duration 0.3)
+              '(:scenes ((:scene tte-ink-waves :presentation card)
+                         (:scene starfield :presentation band)
                          (:presentation mosaic :scenes
-                          ((:scene tte-beams :duration 0.3)
-                           (:scene tte-synthgrid :duration 0.3)
-                           (:scene tte-bubbles :duration 0.3)
-                           (:scene tte-thunderstorm :duration 0.3))))))))
+                          (tte-beams tte-synthgrid tte-bubbles tte-thunderstorm)))))))
      (lambda (_context)
-       (>= (or (plist-get (etaf-screensaver-status) :index) 0) 6)) 12)
+       (>= (or (plist-get (etaf-screensaver-status) :index) 0) 3)) 180)
     (etaf-screensaver-gui--action
      "natural-recording-round"
      (lambda (context)
@@ -321,6 +318,85 @@ four viewport sizes; visual inspection remains a separate requirement."
                (and (not (plist-get (etaf-screensaver-status) :active))
                     (eq (window-buffer) editor)
                     (with-current-buffer editor (zerop (buffer-size))))))))
+          :completion (lambda (_context) (not (plist-get (etaf-screensaver-status) :active))))
+         directory)
+      (etaf-screensaver-mode -1)
+      (when (buffer-live-p editor) (kill-buffer editor)))))
+
+(defun etaf-screensaver-gui--image-files (buffer)
+  "Return the native image files visibly referenced by public BUFFER text."
+  (with-current-buffer buffer
+    (let ((position (point-min)) files)
+      (while (< position (point-max))
+        (let* ((display (get-text-property position 'display))
+               (image (car-safe (cdr-safe display))))
+          (when (eq (car-safe image) 'image)
+            (cl-pushnew (plist-get (cdr image) :file) files :test #'equal)))
+        (setq position (next-single-property-change position 'display nil (point-max))))
+      files)))
+
+(defun etaf-screensaver-gui-run-transition (directory gallery-file)
+  "Capture one natural day-to-night gallery transition in DIRECTORY.
+GALLERY-FILE names the installed collection.  Never shorten its 24-second
+works to make a visible test run faster.  This checks the default reveal,
+not a rapid alternation of light and dark backgrounds."
+  (load (expand-file-name gallery-file) nil t)
+  (let ((editor (generate-new-buffer " *Transition review editor*")))
+    (unwind-protect
+        (etaf-gui-verifier-run
+         (etaf-gui-verifier-scenario-create
+          :name "etaf-screensaver-transition"
+          :claim "A natural page change retains outgoing colors and image slices without a blank interval"
+          :initialize (lambda (context)
+                        (etaf-screensaver-mode -1)
+                        (switch-to-buffer editor)
+                        (delete-other-windows)
+                        (setf (etaf-gui-verifier-context-target-buffer context) editor))
+          :invariants
+          (lambda (context)
+            (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
+              (append (list (etaf-gui-verifier-assert "target-selected" (eq (window-buffer) buffer)))
+                      (etaf-gui-verifier-line-height-assertions buffer))))
+          :actions
+          (list
+           (etaf-screensaver-gui--action
+            "day-moving"
+            (lambda (context)
+              (let ((etaf-screensaver-transition-duration 1.2))
+                (setf (etaf-gui-verifier-context-target-buffer context)
+                      (etaf-screensaver-start
+                       '(:presentation full :scenes (frames-cloud-atlas frames-orbital-mobile))))))
+            (lambda (_context)
+              (let ((status (etaf-screensaver-status)))
+                (and (= (or (plist-get status :index) -1) 0)
+                     (>= (or (plist-get status :ticks) 0) 5)))))
+           (etaf-screensaver-gui--action
+            "day-to-night-reveal"
+            #'ignore
+            (lambda (_context)
+              (let* ((status (etaf-screensaver-status))
+                     (progress (plist-get status :transition-progress)))
+                (and (= (or (plist-get status :index) -1) 1)
+                     progress (<= 0.25 progress 0.65)
+                     (let ((files (etaf-screensaver-gui--image-files (plist-get status :buffer))))
+                       (and (cl-some (lambda (file) (string-match-p "/cloud-atlas/" file)) files)
+                            (cl-some (lambda (file) (string-match-p "/orbital-mobile/" file)) files)))))) 35)
+           (etaf-screensaver-gui--action
+            "night-moving"
+            #'ignore
+            (lambda (_context)
+              (let ((status (etaf-screensaver-status)))
+                (and (= (or (plist-get status :index) -1) 1)
+                     (not (plist-get status :transition-progress))
+                     (> (or (plist-get status :elapsed) 0) 2)))))
+           (etaf-screensaver-gui--action
+            "wake-during-playback"
+            (lambda (context)
+              (execute-kbd-macro "x")
+              (setf (etaf-gui-verifier-context-target-buffer context) editor))
+            (lambda (_context)
+              (and (not (plist-get (etaf-screensaver-status) :active))
+                   (eq (window-buffer) editor) (= (buffer-size editor) 0)))))
           :completion (lambda (_context) (not (plist-get (etaf-screensaver-status) :active))))
          directory)
       (etaf-screensaver-mode -1)

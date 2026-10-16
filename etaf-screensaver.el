@@ -65,7 +65,9 @@
 ;; Also returns :presentation, :duration (page dwell seconds), :works (the
 ;; simultaneous scene ids) and :up-next-works (one id list per pending page).
 ;; :scene and each :up-next entry name the first work on their page; :index
-;; counts pages.  Returned lists can be modified without changing playback.
+;; counts pages.  :transition-progress is nil outside a page reveal, otherwise
+;; its elapsed fraction from zero to one.  Returned lists can be modified
+;; without changing playback.
 ;;
 ;; Function: etaf-screensaver-scenes ()
 ;;;###autoload (autoload 'etaf-screensaver-scenes "etaf-screensaver" nil nil)
@@ -197,6 +199,14 @@
 ;; RATE :presentation STYLE :params ALIST :scenes (SCENE...)).  Bundled packs cover the shipped
 ;; scenes; add your own with `add-to-list' after baking or registering
 ;; scenes.  Playing a pack keeps its works in one visual language.
+;;
+;; Variable: etaf-screensaver-transition-duration
+;; Reveal seconds between different pages, default 1.2, bounded to 0–5.
+;; Zero disables the reveal.  It is capped at half the incoming page's dwell,
+;; without changing that dwell or playback order.  The outgoing page retains
+;; its colors while new moving content is revealed top-to-bottom; the same
+;; page repeated does not transition.  Resize finishes a reveal immediately.
+;; Snapshotted at start, independently of content and presentation.
 ;;
 ;; Variable: etaf-screensaver-scene-duration
 ;; Default positive seconds per scene, default 30.  Items override this.

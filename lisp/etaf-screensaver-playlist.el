@@ -46,6 +46,15 @@ A mosaic page has at most four works and never pads by duplicating a work."
                  (const :tag "Mosaic wall" mosaic))
   :group 'etaf-screensaver)
 
+(defcustom etaf-screensaver-transition-duration 1.2
+  "Seconds for a gentle top-to-bottom reveal between different pages.
+Zero disables transitions.  The old page keeps its colors while the new
+work moves underneath the reveal; there is no blank or recolored interval.
+The reveal is capped at half the incoming page's dwell time.  Repeating the
+same page does not transition.  This setting is independent of the works,
+layout and order, and is snapshotted when presentation starts."
+  :type 'number :group 'etaf-screensaver)
+
 (defcustom etaf-screensaver-scene-duration 30
   "Default seconds spent on each scene; individual program items override it."
   :type 'number :group 'etaf-screensaver)
@@ -263,6 +272,9 @@ Explicit item or group styles precede the global style and pack suggestion."
   (unless (and (numberp etaf-screensaver-max-frame-rate)
                (< 0 etaf-screensaver-max-frame-rate) (<= etaf-screensaver-max-frame-rate 120))
     (etaf-screensaver--fail "Maximum frame rate must be in (0, 120]"))
+  (unless (and (numberp etaf-screensaver-transition-duration)
+               (<= 0 etaf-screensaver-transition-duration 5))
+    (etaf-screensaver--fail "Transition duration must be between 0 and 5 seconds"))
   (unless (or (null etaf-screensaver-seed) (integerp etaf-screensaver-seed))
     (etaf-screensaver--fail "Seed must be an integer or nil"))
   (unless (proper-list-p etaf-screensaver-scene-options)

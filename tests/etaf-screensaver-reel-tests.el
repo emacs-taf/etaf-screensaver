@@ -391,5 +391,36 @@
       (should (eq (plist-get (etaf-screensaver-status) :scene) 'matrix))
       (etaf-screensaver-stop))))
 
+(ert-deftest etaf-screensaver-reel-tests-contained-frame-symlinks ()
+  "Canonical bundle paths accept internal image links but still reject escapes."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (make-temp-file "frames-links-" t))
+           (bundle (expand-file-name "bundle" directory))
+           (alias (expand-file-name "bundle-alias" directory))
+           (target (expand-file-name "imported" directory))
+           (manifest (expand-file-name "linked.frames.json" alias)))
+      (unwind-protect
+          (progn
+            (make-directory bundle)
+            (make-symbolic-link bundle alias)
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png")
+                       (expand-file-name "frame.png" bundle))
+            (make-symbolic-link "frame.png" (expand-file-name "linked.png" bundle))
+            (with-temp-file manifest
+              (insert (json-encode '(:version 1 :width 40 :height 20
+                                    :frame_rate 10 :frames ["linked.png"]))))
+            (let* ((report (etaf-screensaver-import-recording manifest target))
+                   (status (plist-get report :status)))
+              (should (eq status 'imported)))
+            (delete-file (expand-file-name "linked.png" bundle))
+            (copy-file (expand-file-name "frame.png" bundle)
+                       (expand-file-name "outside.png" directory))
+            (make-symbolic-link "../outside.png" (expand-file-name "linked.png" bundle))
+            (should-error (etaf-screensaver-import-recording
+                           manifest (expand-file-name "escaped" directory))
+                          :type 'etaf-screensaver-error)
+            (should-not (file-exists-p (expand-file-name "escaped" directory))))
+        (delete-directory directory t)))))
+
 (provide 'etaf-screensaver-reel-tests)
 ;;; etaf-screensaver-reel-tests.el ends here

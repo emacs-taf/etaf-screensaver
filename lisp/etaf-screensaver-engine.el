@@ -15,13 +15,14 @@
 (require 'etaf-screensaver-model)
 (require 'etaf-screensaver-playlist)
 (require 'etaf-screensaver-presentation)
+(declare-function image-flush "image.c" (image &optional frame))
 
 (declare-function image-flush "image.c" (image &optional frame))
 
 (cl-defstruct (etaf-screensaver--session (:constructor etaf-screensaver--session-new))
   scene state item seed random-state columns rows window-columns window-rows
   size revision params ticks elapsed dt frame published-frame images canvas-ref runtime buffer
-  children layout metrics composition-context template)
+  children layout metrics composition-context template previous-rows transition-duration)
 
 (defun etaf-screensaver--frame-images (frame)
   "Return the distinct image objects FRAME displays."
@@ -121,11 +122,41 @@ only framed works need an explicit background on each row."
                (etaf-screensaver--presentation-compose
                 (mapcar (lambda (work) (etaf-screensaver--session-scene-rows work t)) works)
                 context (etaf-screensaver--session-template session))))
-           "\n"))))
+           "\n"))
+    (when (etaf-screensaver--session-previous-rows session)
+      (let ((progress (/ (etaf-screensaver--session-elapsed session)
+                         (etaf-screensaver--session-transition-duration session))))
+        (if (>= progress 1)
+            (setf (etaf-screensaver--session-previous-rows session) nil)
+          ;; Reuse complete native image slices and text rows.  Smoothstep
+          ;; eases both ends without recompressing images or making SVGs.
+          (let* ((rows (etaf-screensaver--session-window-rows session))
+                 (revealed (round (* rows progress progress (- 3 (* 2 progress)))))
+                 (incoming (split-string (etaf-screensaver--session-frame session) "\n")))
+            (setf (etaf-screensaver--session-frame session)
+                  (mapconcat #'identity
+                             (append (cl-subseq incoming 0 revealed)
+                                     (nthcdr revealed (etaf-screensaver--session-previous-rows session)))
+                             "\n"))))))))
 
-(defun etaf-screensaver--session-select (session item seed)
-  "Initialize SESSION for ITEM at SEED using its window geometry."
-  (let* ((tiles (plist-get item :tiles))
+(defun etaf-screensaver--session-select (session item seed &optional transition)
+  "Initialize SESSION for ITEM at SEED, with optional TRANSITION seconds."
+  ;; A delayed tick must not carry unfinished snapshots across many pages.
+  ;; Finish the prior reveal before retaining at most one outgoing page.
+  (when (etaf-screensaver--session-previous-rows session)
+    (setf (etaf-screensaver--session-previous-rows session) nil)
+    (etaf-screensaver--session-render session))
+  (let* ((previous (when (and transition (> transition 0)
+                              (etaf-screensaver--session-frame session)
+                              (not (equal item (etaf-screensaver--session-item session))))
+                     (let ((frame (copy-sequence (etaf-screensaver--session-frame session))))
+                       ;; The outgoing full canvas may have inherited its
+                       ;; background.  Freeze that color before the Host changes.
+                       (add-face-text-property
+                        0 (length frame)
+                        (list :background (etaf-screensaver--session-background session)) t frame)
+                       (split-string frame "\n"))))
+         (tiles (plist-get item :tiles))
          (layout (etaf-screensaver--presentation-layout
                   (plist-get item :presentation)
                   (etaf-screensaver--session-window-columns session)
@@ -133,6 +164,9 @@ only framed works need an explicit background on each row."
                   (max 1 (length tiles))))
          (slot (car (plist-get layout :slots))))
     (setf (etaf-screensaver--session-layout session) layout
+          (etaf-screensaver--session-previous-rows session) previous
+          (etaf-screensaver--session-transition-duration session)
+          (and previous (min transition (/ (plist-get item :duration) 2.0)))
           (etaf-screensaver--session-composition-context session) nil
           (etaf-screensaver--session-template session) nil
           (etaf-screensaver--session-columns session) (nth 2 slot)
@@ -209,7 +243,10 @@ only framed works need an explicit background on each row."
            (slot (car (plist-get layout :slots)))
            (changed (or (/= (nth 2 slot) (etaf-screensaver--session-columns session))
                         (/= (nth 3 slot) (etaf-screensaver--session-rows session)))))
-      (setf (etaf-screensaver--session-window-columns session) columns
+      ;; A snapshot belongs to its original geometry.  Finish the reveal on
+      ;; resize instead of stretching or clipping an obsolete page over it.
+      (setf (etaf-screensaver--session-previous-rows session) nil
+            (etaf-screensaver--session-window-columns session) columns
             (etaf-screensaver--session-window-rows session) rows
             (etaf-screensaver--session-layout session) layout
             (etaf-screensaver--session-composition-context session) nil

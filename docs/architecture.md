@@ -70,7 +70,8 @@ slice, the same retained Host boundary ETAF video uses. A display run reserves
 its full cell footprint, with a fractional-width spacer for pixel rounding;
 neighboring tile borders therefore stay aligned without stretching the image. The engine flushes the previous frame from Emacs's image cache
 after the next one is committed and flushes remaining images on teardown.
-Thus long playback retains only the currently displayed page's decoded frames.
+Steady playback retains only the current page's decoded frames; a reveal may
+also retain one outgoing page until its last visible slice is replaced.
 Baking is a development step (`scripts/bake-canvas-frames.mjs`): it renders
 a browser canvas offline and writes still frames. Renderer adapters use
 upstream Butterchurn and Vanta, a virtual clock and a seeded RNG; external
@@ -80,7 +81,12 @@ commits by rename. Loop crossfades happen there, not on the Emacs input path.
 `scripts/bake-gallery.mjs` applies the data recipe, delegates each work to the
 baker and generates public `.esr` specs and independent pack configuration.
 The image provider rejects paths leaving the bundle and bounds manifest,
-canvas, frame count and encoded size before import. It is not a decoder
+canvas, frame count and encoded size before import. A canonical bundle root
+and basename-only entries make ordinary asset checks local; symlinks receive
+an additional containment check. Header detection reuses one bounded buffer
+rather than invoking editor buffer-lifecycle hooks for every asset. Import
+always rereads the provider instead of trusting the playback cache: a frame
+or symlink can change without changing the manifest. It is not a decoder
 sandbox. The application never runs a browser, shader or external decoder at
 playback.
 
@@ -114,6 +120,16 @@ The presentation saves the frame's window configuration, caller buffer,
 mouse tracking and any toolbar/tab-bar setting it changes. It mounts a
 canvas-only view in an ephemeral buffer, with no mode line, header, cursor or
 interactive scene controls. It does not create or activate a frame.
+
+A page change freezes at most one outgoing composed frame, including any
+inherited background. The incoming page's clock begins normally. A smoothstep
+reveal replaces complete rows from top to bottom, sharing existing native
+image slices rather than decoding an SVG composition on every tick. Its
+configured duration is snapshotted at start and capped at half the incoming
+dwell. Repeated identical pages skip the reveal; resize completes it. A late
+page change finishes any prior reveal before taking another snapshot, so
+snapshots never accumulate. Publication retains only images still referenced
+by visible rows, and ordinary wake/teardown releases the transition too.
 
 One single-shot animation timer advances every work's elapsed time, selects
 the next page when its duration expires and publishes the composed frame.
@@ -171,4 +187,9 @@ checks every bundled scene, several window shapes and input dismissal, with
 separate screenshot review. Real automatic activation and OS mouse delivery
 require a focused idle/input pass; background evidence cannot establish them.
 Performance scenarios measure autonomous frame cadence including timer wait,
-not a private engine step or the removed workspace controls.
+not a private engine step or the removed workspace controls. Full-size gallery
+workloads include manifest fingerprints in their environment and reject missing
+or reduced fixtures. GUI boundary workloads preserve natural dwell times;
+short repeated boundaries belong only to headless batch tests. The dedicated
+transition GUI scenario captures one normal day-to-night change, including
+both image sources in the public buffer, and exits after wake.

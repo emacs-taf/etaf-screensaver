@@ -85,7 +85,9 @@ file is copied as it is."
                       (etaf-screensaver--fail "No reel provider recognizes %s" file)))
            (provider-id (car entry))
            (provider (cdr entry))
-           (data (etaf-screensaver--reel-read provider-id provider file))
+           ;; Import validates the current assets, not just the manifest's
+           ;; timestamp.  A link or image may have changed since playback.
+           (data (funcall (plist-get provider :read) file))
            (images (plist-get data :image-frames))
            (frames (or images (plist-get data :frames)))
            (kind (if images 'image 'text))

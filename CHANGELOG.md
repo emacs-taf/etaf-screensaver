@@ -4,6 +4,10 @@
 
 ### Added
 
+- Eased page reveals preserve outgoing colors while the next work moves,
+  without per-frame image encoding. Configure the duration independently in
+  Lisp or Customize; wake input remains available throughout.
+
 - A rebuildable 24-work moving gallery, with six light compositions and three
   dark packs. Offline baking reuses Vanta and MilkDrop renderers, retains their
   attribution and licenses, and can crossfade each reel's loop seam.
@@ -54,6 +58,10 @@
 - ETAF UI is no longer a runtime dependency.
 
 ### Fixed
+
+- Image-bundle validation reuses a header buffer and canonical bundle root
+  instead of repeating editor-buffer hooks and path traversal for every still.
+  Import revalidates current assets even when its manifest is unchanged.
 
 - Image bundle imports reject escaping frame paths and oversized manifests,
   declared canvases, frame lists and encoded image payloads before copying.

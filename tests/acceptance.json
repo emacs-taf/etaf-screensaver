@@ -3,6 +3,10 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-presentation-tests-progressive-reveal", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Every layout progressively reveals a moving new page, retaining the outgoing colors and exact row geometry."},
+    {"name": "etaf-screensaver-presentation-tests-reveal-wake-and-options", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Wake during a reveal consumes the key and releases timers; invalid transition settings fail before takeover."},
+    {"name": "etaf-screensaver-presentation-tests-reveal-disabled-and-repeat", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Disabling reveals and repeating an identical page never introduce a transition."},
+    {"name": "etaf-screensaver-reel-tests-contained-frame-symlinks", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Image import accepts contained symlinks through a canonical bundle alias and rejects links that escape it."},
     {"name": "etaf-screensaver-tests-focus-recheck-keeps-preview", "file": "tests/etaf-screensaver-tests.el", "purpose": "A manual preview stays active when Emacs broadcasts a focus recheck without a transition."},
     {"name": "etaf-screensaver-tests-field-invariant-axes", "file": "tests/etaf-screensaver-tests.el", "purpose": "Dense fields preserve both spatial axes and refresh time-dependent values on subsequent frames."},
     {"name": "etaf-screensaver-tests-field-random-short-circuit", "file": "tests/etaf-screensaver-tests.el", "purpose": "Dense fields preserve seeded per-cell randomness and skip unselected expression branches."},
