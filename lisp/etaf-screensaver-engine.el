@@ -13,6 +13,7 @@
 (require 'etaf)
 (require 'etaf-screensaver-model)
 (require 'etaf-screensaver-playlist)
+(declare-function image-flush "image.c" (image &optional frame))
 
 (cl-defstruct (etaf-screensaver--session (:constructor etaf-screensaver--session-new))
   scene state item seed random-state columns rows size revision params
