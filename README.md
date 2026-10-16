@@ -98,8 +98,12 @@ The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 make check          # structure, compilation, public APIs and offline CLI contracts
 make gui SERVER=... # maintained scenario in an owned graphical Emacs server
 make gui-gallery SERVER=... # review the installed gallery and viewport matrix
-make gui-transition SERVER=... # one natural 24-second day-to-night change
+make gui-transition SERVER=... PRESENTATION=mosaic # natural page change and resize checks
 ```
+
+`gui-transition` accepts `full` (the default), `card`, `band` or `mosaic`;
+it preserves the natural dwell, checks wide/ordinary/compact/short resizing
+on the moving incoming page, and consumes a wake key before teardown.
 
 The GUI scenario covers scene rendering, all four presentations across wide,
 ordinary, narrow and short windows, text/image composition, cross-style rounds

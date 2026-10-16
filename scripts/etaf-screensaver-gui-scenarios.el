@@ -335,17 +335,26 @@ four viewport sizes; visual inspection remains a separate requirement."
         (setq position (next-single-property-change position 'display nil (point-max))))
       files)))
 
-(defun etaf-screensaver-gui-run-transition (directory gallery-file)
-  "Capture one natural day-to-night gallery transition in DIRECTORY.
-GALLERY-FILE names the installed collection.  Never shorten its 24-second
-works to make a visible test run faster.  This checks the default reveal,
-not a rapid alternation of light and dark backgrounds."
+(defun etaf-screensaver-gui-run-transition (directory gallery-file &optional presentation)
+  "Capture a natural gallery transition and resize checks in DIRECTORY.
+GALLERY-FILE names the installed collection.  PRESENTATION defaults to full;
+a mosaic uses four distinct works on each page.  Never shorten the natural
+24-second works to accelerate visible tests."
   (load (expand-file-name gallery-file) nil t)
-  (let ((editor (generate-new-buffer " *Transition review editor*")))
+  (let* ((style (or presentation 'full))
+         (day (if (eq style 'mosaic)
+                  '(frames-porcelain-mist frames-cloud-atlas frames-tidal-silver frames-paper-flock)
+                '(frames-cloud-atlas)))
+         (night (if (eq style 'mosaic)
+                    '(frames-orbital-mobile frames-living-cells frames-luminous-halo frames-glass-corridor)
+                  '(frames-orbital-mobile)))
+         (day-pattern (concat "/" (regexp-opt (mapcar (lambda (id) (string-remove-prefix "frames-" (symbol-name id))) day)) "/"))
+         (night-pattern (concat "/" (regexp-opt (mapcar (lambda (id) (string-remove-prefix "frames-" (symbol-name id))) night)) "/"))
+         (editor (generate-new-buffer " *Transition review editor*")))
     (unwind-protect
         (etaf-gui-verifier-run
          (etaf-gui-verifier-scenario-create
-          :name "etaf-screensaver-transition"
+          :name (format "etaf-screensaver-transition-%s" style)
           :claim "A natural page change retains outgoing colors and image slices without a blank interval"
           :initialize (lambda (context)
                         (etaf-screensaver-mode -1)
@@ -358,17 +367,20 @@ not a rapid alternation of light and dark backgrounds."
               (append (list (etaf-gui-verifier-assert "target-selected" (eq (window-buffer) buffer)))
                       (etaf-gui-verifier-line-height-assertions buffer))))
           :actions
-          (list
-           (etaf-screensaver-gui--action
+          (append
+           (list
+            (etaf-screensaver-gui--action
             "day-moving"
             (lambda (context)
               (let ((etaf-screensaver-transition-duration 1.2))
                 (setf (etaf-gui-verifier-context-target-buffer context)
                       (etaf-screensaver-start
-                       '(:presentation full :scenes (frames-cloud-atlas frames-orbital-mobile))))))
+                       (list :presentation style :scenes (append day night))))))
             (lambda (_context)
               (let ((status (etaf-screensaver-status)))
                 (and (= (or (plist-get status :index) -1) 0)
+                     (equal (plist-get status :works) day)
+                     (= (length (etaf-screensaver-gui--image-files (plist-get status :buffer))) (length day))
                      (>= (or (plist-get status :ticks) 0) 5)))))
            (etaf-screensaver-gui--action
             "day-to-night-reveal"
@@ -379,24 +391,42 @@ not a rapid alternation of light and dark backgrounds."
                 (and (= (or (plist-get status :index) -1) 1)
                      progress (<= 0.25 progress 0.65)
                      (let ((files (etaf-screensaver-gui--image-files (plist-get status :buffer))))
-                       (and (cl-some (lambda (file) (string-match-p "/cloud-atlas/" file)) files)
-                            (cl-some (lambda (file) (string-match-p "/orbital-mobile/" file)) files)))))) 35)
+                       (and (cl-some (lambda (file) (string-match-p day-pattern file)) files)
+                            (cl-some (lambda (file) (string-match-p night-pattern file)) files)))))) 35)
            (etaf-screensaver-gui--action
             "night-moving"
             #'ignore
             (lambda (_context)
               (let ((status (etaf-screensaver-status)))
                 (and (= (or (plist-get status :index) -1) 1)
+                     (equal (plist-get status :works) night)
                      (not (plist-get status :transition-progress))
-                     (> (or (plist-get status :elapsed) 0) 2)))))
-           (etaf-screensaver-gui--action
+                     (> (or (plist-get status :elapsed) 0) 2))))))
+           (mapcar
+            (lambda (size)
+              (let ((tick 0))
+                (etaf-screensaver-gui--action
+                 (format "resize-%dx%d" (car size) (cdr size))
+                 (lambda (_context)
+                   (setq tick (plist-get (etaf-screensaver-status) :ticks))
+                   (set-frame-size nil (car size) (cdr size)))
+                 (lambda (_context)
+                   (let ((status (etaf-screensaver-status)))
+                     (and (= (frame-width) (car size)) (= (frame-height) (cdr size))
+                          (> (or (plist-get status :ticks) 0) (+ tick 1))
+                          (= (or (plist-get status :rows) 0) (window-body-height))
+                          (= (length (etaf-screensaver-gui--image-files (plist-get status :buffer)))
+                             (length night))))))))
+            '((160 . 52) (130 . 46) (80 . 34) (100 . 24)))
+           (list
+            (etaf-screensaver-gui--action
             "wake-during-playback"
             (lambda (context)
               (execute-kbd-macro "x")
               (setf (etaf-gui-verifier-context-target-buffer context) editor))
             (lambda (_context)
               (and (not (plist-get (etaf-screensaver-status) :active))
-                   (eq (window-buffer) editor) (= (buffer-size editor) 0)))))
+                   (eq (window-buffer) editor) (= (buffer-size editor) 0))))))
           :completion (lambda (_context) (not (plist-get (etaf-screensaver-status) :active))))
          directory)
       (etaf-screensaver-mode -1)

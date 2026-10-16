@@ -9,6 +9,7 @@ PYTHON ?= python3
 NODE ?= node
 EMACSCLIENT ?= emacsclient
 GALLERY ?= $(HOME)/.emacs.d/etaf-screensaver/scenes/gallery/gallery.el
+PRESENTATION ?= full
 
 # Providers live beside the application (standalone) or two levels up (workspace).
 PROVIDER_ROOT := $(if $(wildcard ../etaf/etaf.el),..,$(if $(wildcard ../../etaf/etaf.el),../..,))
@@ -64,7 +65,7 @@ gui-gallery:
 	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-gallery-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run-gallery) directory "$(GALLERY)") directory))'
 
 gui-transition:
-	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-transition-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run-transition) directory "$(GALLERY)") directory))'
+	$(EMACSCLIENT) $(if $(SERVER),--socket-name "$(SERVER)",) --eval '(progn (require (quote etaf-screensaver)) (add-to-list (quote load-path) (expand-file-name "scripts" (file-name-directory (locate-library "etaf")))) (load "$(CURDIR)/scripts/etaf-screensaver-gui-scenarios.el" nil t) (let ((directory (make-temp-file "etaf-screensaver-transition-gui-" t))) (run-at-time 0.05 nil (function etaf-screensaver-gui-run-transition) directory "$(GALLERY)" (quote $(PRESENTATION))) directory))'
 
 clean:
 	rm -f *.elc lisp/*.elc tests/*.elc scripts/*.elc benchmarks/*.elc
