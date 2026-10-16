@@ -25,24 +25,49 @@
   children layout metrics composition-context template previous-rows transition-duration)
 
 (defun etaf-screensaver--frame-display (frame)
-  "Project logical image footprints in FRAME as single replacing glyphs.
+  "Project FRAME's image footprints and blank runs as replacing display units.
 Composition and clipping still use complete character-cell footprints.  At
-publication, an image slice replaces its entire run, so one character carries
-the same pixels without asking the renderer to measure a long replaced run."
-  (let ((position 0) (start 0) (length (length frame)) pieces)
-    (while (< position length)
-      (let* ((end (next-single-property-change position 'display frame length))
-             (display (get-text-property position 'display frame)))
-        (when (and (> (- end position) 1)
-                   (eq (car-safe (car-safe display)) 'slice)
+publication, an image slice needs only one glyph.  Adjacent ordinary spaces
+with identical properties share one fixed-width space glyph, preserving
+face metrics without allocating a renderer unit per empty cell.
+Neither projection mutates the logical frame or its scene's source strings."
+  (save-match-data
+    (let ((position 0) (start 0) (length (length frame)) pieces)
+      (while (< position length)
+        (let* ((display (get-text-property position 'display frame))
+               (end (if display
+                        (next-single-property-change position 'display frame length)
+                      (next-property-change position frame length))))
+          (when (> (- end position) 1)
+            (cond
+             ((and (eq (car-safe (car-safe display)) 'slice)
                    (eq (car-safe (cadr display)) 'image))
-          (push (substring frame start position) pieces)
-          (push (substring frame position (1+ position)) pieces)
-          (setq start end))
-        (setq position end)))
-    (if pieces
-        (apply #'concat (nreverse (cons (substring frame start) pieces)))
-      frame)))
+              (push (substring frame start position) pieces)
+              (push (substring frame position (1+ position)) pieces)
+              (setq start end))
+             ((not (or display
+                       (get-text-property position 'composition frame)
+                       (get-text-property position 'invisible frame)))
+              (let ((part (substring frame position end)) (offset 0) space-width)
+                (while (string-match "  +" part offset)
+                  (let* ((from (match-beginning 0))
+                         (to (match-end 0))
+                         (blank (substring part from (1+ from))))
+                    ;; Identically styled spaces have additive widths.  Measure
+                    ;; one with its own face, not the default character width.
+                    (unless space-width
+                      (setq space-width (etaf-string-pixel-width
+                                         blank)))
+                    (put-text-property
+                     0 (length blank) 'display
+                     (list 'space :width (list (* (- to from) space-width))) blank)
+                    (push (substring frame start (+ position from)) pieces)
+                    (push blank pieces)
+                    (setq start (+ position to) offset to)))))))
+          (setq position end)))
+      (if pieces
+          (apply #'concat (nreverse (cons (substring frame start) pieces)))
+        frame))))
 
 (defun etaf-screensaver--frame-images (frame)
   "Return the distinct image objects FRAME displays."
@@ -227,8 +252,10 @@ only framed works need an explicit background on each row."
   (let ((runtime (etaf-screensaver--session-runtime session))
         (ref (etaf-screensaver--session-canvas-ref session))
         (frame (etaf-screensaver--session-frame session)))
+    ;; The canvas Host exists for the whole mount, even when old oversized
+    ;; glyphs own no painted cells after a shrink.  Visibility is not a
+    ;; precondition for publishing the newly fitted frame that restores them.
     (when (and runtime (etaf-runtime-mounted-p runtime)
-               (etaf-host-ref-bounds runtime ref)
                (not (equal-including-properties frame (etaf-screensaver--session-published-frame session))))
       (etaf-runtime-update-host-content
        runtime ref (etaf-screensaver--frame-display frame))

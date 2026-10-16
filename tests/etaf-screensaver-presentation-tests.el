@@ -35,6 +35,13 @@
   (with-current-buffer buffer
     (buffer-substring-no-properties (point-min) (point-max))))
 
+(defun etaf-screensaver-presentation-tests--row-widths (buffer)
+  "Return the displayed pixel widths of BUFFER's canvas rows."
+  (with-current-buffer buffer
+    (mapcar #'etaf-string-pixel-width
+            (split-string (string-remove-suffix "\n" (buffer-substring (point-min) (point-max)))
+                          "\n"))))
+
 (ert-deftest etaf-screensaver-presentation-tests-color-only-animation ()
   "A frame changing only face properties must still repaint after its first tick."
   (etaf-screensaver-presentation-tests--clean
@@ -120,8 +127,10 @@
         (should (eq (plist-get status :presentation) style))
         (should (string-match-p "ONE 中 000" text))
         (should (= (length lines) (plist-get status :rows)))
-        (dolist (line lines)
-          (should (= (string-width line) (plist-get status :columns)))))
+        (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+               (expected (* (plist-get status :columns) (plist-get metrics :char-width))))
+          (dolist (width (etaf-screensaver-presentation-tests--row-widths buffer))
+            (should (= width expected)))))
       (etaf-screensaver-stop))))
 
 (ert-deftest etaf-screensaver-presentation-tests-style-precedence ()
@@ -196,6 +205,54 @@
         (should restored)
         (should-not remaining)))))
 
+(ert-deftest etaf-screensaver-presentation-tests-styled-blank-geometry ()
+  "Publication preserves styled blank widths, color boundaries and source rows."
+  (etaf-screensaver-presentation-tests--clean
+    (let* ((source (concat "L"
+                           (propertize "    " 'face
+                                       '(:background "#335577" :height 1.2 :weight bold))
+                           (propertize "   " 'face
+                                       '(:background "#776644" :height 0.9))
+                           "中R"))
+           (original (copy-sequence source)))
+      (etaf-screensaver-define-scene presentation-blanks
+        :frame-rate 40
+        :create (lambda (_context) nil)
+        :step (lambda (_state _context) nil)
+        :render (lambda (_state context)
+                  (list (concat source (number-to-string (mod (plist-get context :tick) 10))))))
+      (dolist (style '(full card band mosaic))
+        (let ((buffer (etaf-screensaver-start
+                       (list :scene 'presentation-blanks :presentation style))))
+          (dotimes (pass 2)
+            (when (> pass 0)
+              (etaf-screensaver-presentation-tests--wait
+               (lambda () (>= (plist-get (etaf-screensaver-status) :ticks) 3))))
+            (with-current-buffer buffer
+              (save-excursion
+                (goto-char (point-min))
+                (search-forward "L")
+                (let ((start (1- (point))))
+                  (search-forward "中R")
+                  (let* ((published (buffer-substring start (point)))
+                         (width (etaf-string-pixel-width published))
+                         (expected (etaf-string-pixel-width source))
+                         (wide-position (string-match "中R" published)))
+                    (should wide-position)
+                    (should (= width expected))
+                    (dolist (sample (list (cons 1 "#335577")
+                                          (cons (1- wide-position) "#776644")))
+                      (let* ((face (get-text-property (car sample) 'face published))
+                             (specs (if (keywordp (car-safe face)) (list face) face))
+                             (background (cl-loop for spec in specs
+                                                  when (and (listp spec)
+                                                            (plist-get spec :background))
+                                                  return (plist-get spec :background))))
+                        (should (equal background (cdr sample))))))))))
+          (let ((unchanged (equal-including-properties source original)))
+            (should unchanged)))
+        (etaf-screensaver-stop)))))
+
 (ert-deftest etaf-screensaver-presentation-tests-preserves-source-faces ()
   "Framing a shared exact-width row must not recolor the scene's source string."
   (etaf-screensaver-presentation-tests--clean
@@ -263,8 +320,10 @@
             (should (string-match-p "NNNN" text))
             (should-not (string-match-p "OOOO" text))
             (should (> (plist-get status :ticks) 5))
-            (dolist (row (split-string (string-remove-suffix "\n" text) "\n"))
-              (should (= (string-width row) (plist-get status :columns))))))
+            (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+                   (expected (* (plist-get status :columns) (plist-get metrics :char-width))))
+              (dolist (width (etaf-screensaver-presentation-tests--row-widths buffer))
+                (should (= width expected))))))
         (etaf-screensaver-stop)))))
 
 (ert-deftest etaf-screensaver-presentation-tests-reveal-wake-and-options ()

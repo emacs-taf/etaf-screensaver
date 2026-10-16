@@ -30,7 +30,16 @@ text or image runs. Exact-width rows can be reused, but adding page-specific
 faces first copies the source so a recording's
 cached strings do not acquire another presentation's colors. Short rows only
 append blank cells; fitting a row that already fits does not slice or rebuild
-its text and image runs.
+its text and image runs. At final publication, consecutive ordinary spaces
+with identical text properties share a single fixed-pixel space glyph. The
+width comes from a space measured with that run's face, not the default font;
+property boundaries, newlines, existing display objects and composed/invisible
+text are not merged. A fixed space occupies one glyph, so pixel-based clipping
+can cut it without counting its width once per placeholder. This projection
+never changes the logical rows used for composition or reveals. The renderer
+handles one unit per blank run rather than per empty cell. Publication depends
+on the Runtime mount, not the Host's painted bounds: a shrink can temporarily
+clip all old glyphs, and the newly fitted frame must still replace them.
 
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
