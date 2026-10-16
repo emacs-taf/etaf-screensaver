@@ -88,7 +88,11 @@
               '(:scenes ((:scene tte-beams :presentation full)
                          (:scene tte-ink-waves :presentation card))))))
      (lambda (_context)
-       (>= (or (plist-get (etaf-screensaver-status) :index) 0) 2)) 120))))
+       (let ((status (etaf-screensaver-status)))
+         (unless (plist-get status :active)
+           (error "Natural recording presentation ended before completing its round (focus %s, pending input %s)"
+                  (frame-focus-state) (input-pending-p)))
+         (>= (or (plist-get status :index) 0) 2))) 120))))
 
 (defun etaf-screensaver-gui--scenario ()
   "Return the presentation-only lifecycle scenario."
@@ -125,6 +129,19 @@
           (etaf-gui-verifier-line-height-assertions buffer))))
      :actions
      (append
+      (list
+       (etaf-screensaver-gui--action
+        "focus-recheck"
+        (lambda (context)
+          (setf (etaf-gui-verifier-context-target-buffer context)
+                (etaf-screensaver-start 'matrix))
+          ;; The notification is global: a recheck without a focus transition
+          ;; must leave a manual preview alive, even in a background frame.
+          (funcall after-focus-change-function))
+        (lambda (_context)
+          (let ((status (etaf-screensaver-status)))
+            (and (plist-get status :active)
+                 (>= (or (plist-get status :ticks) 0) 2))))))
       (mapcar
        (lambda (scene)
          (etaf-screensaver-gui--action

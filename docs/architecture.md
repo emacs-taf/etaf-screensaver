@@ -21,13 +21,26 @@ four without crossing pack boundaries. Partial pages do not fabricate works.
 The presentation layout is the single source of content rectangles for both
 callback sizing and composition; a wall is not a sliced single-scene frame.
 Only the parent owns a mounted Runtime. Color-only changes are meaningful:
-publication compares text properties as well as characters.
+publication compares text properties as well as characters. Full-canvas works
+inherit the Host background directly. Framed works use a read-only mat, border
+and caption template, rebuilt only for a new page, viewport or clock minute;
+its rows are split into static fragments and work-row slots. Each animation
+row concatenates these once, without recropping an already placed neighbor's
+text or image runs. Exact-width rows can be reused, but adding page-specific
+faces first copies the source so a recording's
+cached strings do not acquire another presentation's colors.
 
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
 width. Composition preserves wide-character continuation cells and merges
 adjacent colors. The expression interpreter evaluates only its whitelist;
-argument traversal does not allocate a closure per expression. The engine
+common unary/binary arithmetic does not allocate an argument list per
+expression. A dense field builds closures over that same whitelist and reuses
+exact subexpression values along invariant spatial/time axes. Its caches and
+coordinate bindings belong to the field and are recreated on resize. Changing
+globals refresh per render; random calls are never cached, and conditional
+branches remain lazy. Scene data is never evaluated as Lisp, and the environment
+cannot escape through the expression whitelist. The engine
 owns no timer or input handler.
 
 ## Recorded animations
@@ -81,7 +94,9 @@ timing and loop independently. It schedules a successor only
 if it still owns the active presentation. Scene boundaries and resize update
 reactive view inputs; ordinary animation publishes just retained canvas text.
 If the window disappears, the buffer dies, the frame is deleted or focus is
-lost, the presentation is released rather than running invisibly.
+lost, the presentation is released rather than running invisibly. Focus loss
+means an observed true-to-false transition on the owning frame, not a global
+notification while a manual background preview is already unfocused.
 
 A transient map plus a pre-command hook consumes wake input. Mouse tracking
 is enabled only while presenting. Button-down is consumed before dismissal

@@ -316,5 +316,90 @@
             (should (equal title "Changed"))))
       (delete-directory directory t))))
 
+(ert-deftest etaf-screensaver-tests-field-arithmetic ()
+  "Dense fields preserve unary, binary and variadic arithmetic semantics."
+  (etaf-screensaver-tests--clean
+    (dolist (case '(((+ (sin 0) (cos 0)) . 1)
+                    ((- 4 3) . 1) ((* 0.5 2) . 1) ((/ 3 2) . 1.5)
+                    ((pow 2 3) . 8) ((min 2 1) . 1) ((max 0 1) . 1)
+                    ((sqrt 4) . 2) ((float 2) . 2.0) ((floor 2.9) . 2)
+                    ((ceiling 2.1) . 3) ((round 2.9) . 3) ((abs -2) . 2)
+                    ((tan 0) . 0) ((+ 1 2 3) . 6) ((/ 12 2 3) . 2)))
+      (etaf-screensaver-register-scene
+       (list :id 'test-arithmetic
+             :layers (list (list :kind 'field :block '(8 8) :ramp "01"
+                                 :value (list 'if (list '= (car case) (cdr case)) 1 0)))))
+      (let* ((buffer (etaf-screensaver-start 'test-arithmetic))
+             (text (etaf-screensaver-tests--text buffer)))
+        (should (string-prefix-p "1111" text)))
+      (etaf-screensaver-stop))))
+
+(ert-deftest etaf-screensaver-tests-field-coordinate-precedence ()
+  "Every field cell gets its own coordinates, ahead of same-named parameters."
+  (etaf-screensaver-tests--clean
+    (etaf-screensaver-register-scene
+     '(:id test-coordinates
+       :params ((:key x :label "Parameter x" :type number :default 5 :min 0 :max 10))
+       :layers ((:kind field :value (mod (+ x y) 2) :ramp ".#"))))
+    (let* ((buffer (etaf-screensaver-start 'test-coordinates))
+           (lines (split-string (etaf-screensaver-tests--text buffer) "\n")))
+      (should (string-prefix-p ".#.#" (nth 0 lines)))
+      (should (string-prefix-p "#.#." (nth 1 lines))))))
+
+(ert-deftest etaf-screensaver-tests-field-invariant-axes ()
+  "Field values retain x/y variation and refresh time-dependent subexpressions."
+  (etaf-screensaver-tests--clean
+    (etaf-screensaver-register-scene
+     '(:id test-field-axes :frame-rate 40
+       :layers ((:kind field :value (mod (+ (* x y) x (* 2 y) tick) 10)
+                       :range (0 10) :ramp "0123456789"))))
+    (let ((buffer (etaf-screensaver-start 'test-field-axes)))
+      (dotimes (pass 2)
+        (when (> pass 0)
+          (let ((deadline (+ (float-time) 3)))
+            (while (and (< (float-time) deadline)
+                        (< (or (plist-get (etaf-screensaver-status) :ticks) 0) 2))
+              (sleep-for 0.005)))
+          (let ((ticks (plist-get (etaf-screensaver-status) :ticks)))
+            (should (>= ticks 2))))
+        (let* ((status (etaf-screensaver-status))
+               (tick (plist-get status :ticks))
+               (lines (split-string (etaf-screensaver-tests--text buffer) "\n")))
+          (dotimes (y 4)
+            (let ((expected (apply #'string
+                                   (cl-loop for x below 10
+                                            collect (+ ?0 (mod (+ (* x y) x (* 2 y) tick) 10))))))
+              (should (string-prefix-p expected (nth y lines))))))))))
+
+(ert-deftest etaf-screensaver-tests-field-random-short-circuit ()
+  "A field draws the same seeded random stream as a callback, skipping dead branches."
+  (etaf-screensaver-tests--clean
+    (etaf-screensaver-register-scene
+     '(:id test-field-random :frame-rate 1
+       :layers ((:kind field :value (if (< x 0) (/ 1 0) (rndi 10))
+                       :range (0 10) :ramp "0123456789"))))
+    (etaf-screensaver-define-scene test-field-reference
+      :frame-rate 1 :create (lambda (_context) nil) :step (lambda (_state _context) nil)
+      :resize (lambda (state _context) state)
+      :render (lambda (_state context)
+                (let ((random (plist-get context :random)))
+                  (cl-loop repeat (plist-get context :rows)
+                           collect (apply #'string
+                                          (cl-loop repeat (plist-get context :columns)
+                                                   collect (+ ?0 (floor (* 10 (funcall random))))))))))
+    (let ((actual (etaf-screensaver-tests--text (etaf-screensaver-start 'test-field-random))))
+      (etaf-screensaver-stop)
+      (let* ((expected (etaf-screensaver-tests--text (etaf-screensaver-start 'test-field-reference)))
+             (same (equal actual expected)))
+        (should same)))))
+
+(ert-deftest etaf-screensaver-tests-focus-recheck-keeps-preview ()
+  "A global focus notification without a transition leaves a manual preview alive."
+  (etaf-screensaver-tests--clean
+    (etaf-screensaver-start 'matrix)
+    (funcall after-focus-change-function)
+    (let ((active (plist-get (etaf-screensaver-status) :active)))
+      (should active))))
+
 (provide 'etaf-screensaver-tests)
 ;;; etaf-screensaver-tests.el ends here

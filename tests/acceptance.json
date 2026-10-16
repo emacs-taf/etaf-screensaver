@@ -3,6 +3,12 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-tests-focus-recheck-keeps-preview", "file": "tests/etaf-screensaver-tests.el", "purpose": "A manual preview stays active when Emacs broadcasts a focus recheck without a transition."},
+    {"name": "etaf-screensaver-tests-field-invariant-axes", "file": "tests/etaf-screensaver-tests.el", "purpose": "Dense fields preserve both spatial axes and refresh time-dependent values on subsequent frames."},
+    {"name": "etaf-screensaver-tests-field-random-short-circuit", "file": "tests/etaf-screensaver-tests.el", "purpose": "Dense fields preserve seeded per-cell randomness and skip unselected expression branches."},
+    {"name": "etaf-screensaver-tests-field-arithmetic", "file": "tests/etaf-screensaver-tests.el", "purpose": "Public field scenes preserve unary, binary and variadic arithmetic, including floating division."},
+    {"name": "etaf-screensaver-tests-field-coordinate-precedence", "file": "tests/etaf-screensaver-tests.el", "purpose": "Field coordinates advance per cell and shadow same-named scene parameters."},
+    {"name": "etaf-screensaver-presentation-tests-preserves-source-faces", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Framed publication preserves the scene's shared exact-width source strings and their face properties."},
     {"name": "etaf-screensaver-presentation-tests-color-only-animation", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "A work changing only colors repaints after its first tick."},
     {"name": "etaf-screensaver-presentation-tests-independent-wall", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Four independent works animate concurrently and a fifth plays on the next page without duplication."},
     {"name": "etaf-screensaver-presentation-tests-styles-preserve-unicode", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "All four styles preserve wide characters and exact viewport row/column budgets."},

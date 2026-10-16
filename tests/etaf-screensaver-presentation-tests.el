@@ -193,5 +193,22 @@
         (should restored)
         (should-not remaining)))))
 
+(ert-deftest etaf-screensaver-presentation-tests-preserves-source-faces ()
+  "Framing a shared exact-width row must not recolor the scene's source string."
+  (etaf-screensaver-presentation-tests--clean
+    (let (source-row)
+      (etaf-screensaver-define-scene presentation-shared
+        :create (lambda (context)
+                  (setq source-row (propertize (make-string (plist-get context :columns) ?X)
+                                                'face '(:foreground "#559977"))))
+        :step (lambda (_state _context) nil)
+        :render (lambda (state _context) (list state)))
+      (dolist (style '(full card band mosaic))
+        (etaf-screensaver-start (list :scene 'presentation-shared :presentation style
+                                     :background "#F4F1EA"))
+        (let ((face (get-text-property 0 'face source-row)))
+          (should (equal face '(:foreground "#559977"))))
+        (etaf-screensaver-stop)))))
+
 (provide 'etaf-screensaver-presentation-tests)
 ;;; etaf-screensaver-presentation-tests.el ends here

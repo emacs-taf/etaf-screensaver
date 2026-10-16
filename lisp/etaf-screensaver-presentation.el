@@ -45,31 +45,35 @@
 A partially visible wide character becomes padding.  Cropped image runs keep
 only the corresponding horizontal slice, rather than displaying the full image
 from a shortened character span.  Reel image runs reserve their cell footprint."
-  (let ((start (or start 0)) (position 0) (column 0) pieces)
-    (while (and (< position (length text)) (< column (+ start width)))
-      (let* ((end (next-single-property-change position 'display text (length text)))
-             (run (substring text position end))
-             (cells (string-width run))
-             (from (max 0 (- start column)))
-             (to (min cells (- (+ start width) column))))
-        (when (< from to)
-          (let* ((piece (truncate-string-to-width run to from ?\s))
-                 (display (get-text-property position 'display text))
-                 (slice (car-safe display)))
-            (when (and (eq (car-safe slice) 'slice) (> cells 0)
-                       (or (> from 0) (< to cells)))
-              (let* ((x (nth 1 slice)) (w (nth 3 slice))
-                     (left (round (* w (/ (float from) cells)))))
-                (put-text-property
-                 0 (length piece) 'display
-                 (list (list 'slice (+ x left) (nth 2 slice)
-                             (- (round (* w (/ (float to) cells))) left)
-                             (nth 4 slice))
-                       (cadr display)) piece)))
-            (push piece pieces)))
-        (setq column (+ column cells) position end)))
-    (let ((result (apply #'concat (nreverse pieces))))
-      (concat result (make-string (max 0 (- width (string-width result))) ?\s)))))
+  (cond
+   ((zerop width) "")
+   ((and (zerop (or start 0)) (= (string-width text) width)) text)
+   (t
+    (let ((start (or start 0)) (position 0) (column 0) pieces)
+      (while (and (< position (length text)) (< column (+ start width)))
+        (let* ((end (next-single-property-change position 'display text (length text)))
+               (run (substring text position end))
+               (cells (string-width run))
+               (from (max 0 (- start column)))
+               (to (min cells (- (+ start width) column))))
+          (when (< from to)
+            (let* ((piece (truncate-string-to-width run to from ?\s))
+                   (display (get-text-property position 'display text))
+                   (slice (car-safe display)))
+              (when (and (eq (car-safe slice) 'slice) (> cells 0)
+                         (or (> from 0) (< to cells)))
+                (let* ((x (nth 1 slice)) (w (nth 3 slice))
+                       (left (round (* w (/ (float from) cells)))))
+                  (put-text-property
+                   0 (length piece) 'display
+                   (list (list 'slice (+ x left) (nth 2 slice)
+                               (- (round (* w (/ (float to) cells))) left)
+                               (nth 4 slice))
+                         (cadr display)) piece)))
+              (push piece pieces)))
+          (setq column (+ column cells) position end)))
+      (let ((result (apply #'concat (nreverse pieces))))
+        (concat result (make-string (max 0 (- width (string-width result))) ?\s)))))))
 
 (defun etaf-screensaver--presentation-layout (style columns rows &optional count)
   "Return STYLE's layout with COLUMNS, ROWS and COUNT independent works.
@@ -122,10 +126,10 @@ callbacks and place their output.  A narrow wall stacks works vertically."
   (propertize (etaf-screensaver--presentation-crop text width)
               'face (list :foreground foreground :background background)))
 
-(defun etaf-screensaver--presentation-compose (style frames context)
-  "Compose STYLE's independent FRAMES using CONTEXT's layout and captions.
-FRAMES is a list of row lists.  CONTEXT holds :layout, actual :columns/:rows,
-:backgrounds and :titles in work order, :pack-title and optional :clock."
+(defun etaf-screensaver--presentation-template (style context)
+  "Build STYLE's row plans from CONTEXT, outside the per-frame path.
+Each plan holds static mat/border/caption strings and (WORK . ROW) slots.
+Plans are shared read-only until the page, geometry or minute changes."
   (let* ((layout (plist-get context :layout))
          (width (plist-get layout :width))
          (height (plist-get layout :height))
@@ -134,8 +138,7 @@ FRAMES is a list of row lists.  CONTEXT holds :layout, actual :columns/:rows,
          (mat (plist-get palette :mat))
          (blank (propertize (make-string width ?\s) 'face (list :background mat)))
          (canvas (make-vector height blank)))
-    (cl-loop for frame in frames
-             for slot in (plist-get layout :slots)
+    (cl-loop for slot in (plist-get layout :slots)
              for title in (plist-get context :titles)
              for background in backgrounds
              do
@@ -146,8 +149,6 @@ FRAMES is a list of row lists.  CONTEXT holds :layout, actual :columns/:rows,
                       (caption (if (and (not (eq style 'mosaic)) (plist-get context :pack-title))
                                    (format "%s · %s" (plist-get context :pack-title) title)
                                  title)))
-                 (cl-loop for row in frame for index from 0 below h
-                          do (etaf-screensaver--presentation-put canvas x (+ y index) row))
                  (pcase style
                    ((or 'card 'mosaic)
                     (etaf-screensaver--presentation-put
@@ -172,10 +173,36 @@ FRAMES is a list of row lists.  CONTEXT holds :layout, actual :columns/:rows,
                       (etaf-screensaver--presentation-put
                        canvas 0 (+ y h 2)
                        (etaf-screensaver--presentation-label (concat " " caption) w (plist-get palette :mat-text) mat))))))))
+    ;; Split static rows once.  Repeatedly splicing a second tile into an
+    ;; already composed row would remeasure/copy the first tile's face and
+    ;; image runs, although every work is already fitted to its own slot.
+    (dotimes (row height)
+      (let ((text (aref canvas row)) (column 0) parts)
+        (cl-loop for slot in (plist-get layout :slots) for work from 0
+                 do (pcase-let ((`(,x ,y ,w ,h) slot))
+                      (when (and (>= row y) (< row (+ y h)))
+                        (when (< column x)
+                          (push (etaf-screensaver--presentation-crop text (- x column) column) parts))
+                        (push (cons work (- row y)) parts)
+                        (setq column (+ x w)))))
+        (when (< column width)
+          (push (etaf-screensaver--presentation-crop text (- width column) column) parts))
+        (aset canvas row (nreverse parts))))
+    canvas))
+
+(defun etaf-screensaver--presentation-compose (frames context template)
+  "Place independent FRAMES in read-only TEMPLATE's pre-split row plans."
+  (let ((works (vconcat (mapcar #'vconcat frames)))
+        (columns (plist-get context :columns))
+        (width (plist-get (plist-get context :layout) :width)))
     (cl-loop for index below (plist-get context :rows)
-             collect (etaf-screensaver--presentation-crop
-                      (if (< index height) (aref canvas index) blank)
-                      (plist-get context :columns)))))
+             for row = (mapconcat
+                        (lambda (part)
+                          (if (stringp part) part
+                            (aref (aref works (car part)) (cdr part))))
+                        (aref template index) "")
+             collect (if (= columns width) row
+                       (etaf-screensaver--presentation-crop row columns)))))
 
 (provide 'etaf-screensaver-presentation)
 ;;; etaf-screensaver-presentation.el ends here

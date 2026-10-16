@@ -21,7 +21,7 @@
 (cl-defstruct (etaf-screensaver--session (:constructor etaf-screensaver--session-new))
   scene state item seed random-state columns rows window-columns window-rows
   size revision params ticks elapsed dt frame published-frame images canvas-ref runtime buffer
-  children layout metrics)
+  children layout metrics composition-context template)
 
 (defun etaf-screensaver--frame-images (frame)
   "Return the distinct image objects FRAME displays."
@@ -62,8 +62,10 @@
                     (if limit (cl-random limit random-state)
                       (/ (float (cl-random 1000000 random-state)) 1000000.0))))))
 
-(defun etaf-screensaver--session-scene-rows (session)
-  "Render SESSION's single work into rectangular property-bearing rows."
+(defun etaf-screensaver--session-scene-rows (session &optional paint-background)
+  "Render SESSION's rectangular rows, optionally adding PAINT-BACKGROUND.
+A full-canvas work already inherits its background from the retained Host;
+only framed works need an explicit background on each row."
   (let* ((frame (funcall (etaf-screensaver--scene-render (etaf-screensaver--session-scene session))
                          (etaf-screensaver--session-state session)
                          (etaf-screensaver--session-context session)))
@@ -79,7 +81,11 @@
                (unless (stringp line) (etaf-screensaver--fail "Scene rows must be strings"))
                (let ((row (etaf-screensaver--presentation-crop
                            (string-replace "\r" "" (string-replace "\t" " " line)) columns)))
-                 (add-face-text-property 0 (length row) (list :background background) t row)
+                 (when paint-background
+                   ;; An exact-width crop may return the recording's cached row.
+                   ;; Do not add page-specific faces to that shared source.
+                   (setq row (copy-sequence row))
+                   (add-face-text-property 0 (length row) (list :background background) t row))
                  row)))))
 
 (defun etaf-screensaver--session-render (session)
@@ -87,7 +93,8 @@
   (let* ((runtime (etaf-screensaver--session-runtime session))
          (children (etaf-screensaver--session-children session))
          (works (or children (list session)))
-         (item (etaf-screensaver--session-item session)))
+         (item (etaf-screensaver--session-item session))
+         (style (plist-get item :presentation)))
     (when (and runtime (etaf-runtime-mounted-p runtime))
       (setf (etaf-screensaver--session-metrics session) (etaf-display-metrics runtime)))
     (dolist (child children)
@@ -95,15 +102,25 @@
     (setf (etaf-screensaver--session-frame session)
           (mapconcat
            #'identity
-           (etaf-screensaver--presentation-compose
-            (plist-get item :presentation)
-            (mapcar #'etaf-screensaver--session-scene-rows works)
-            (list :layout (etaf-screensaver--session-layout session)
-                  :columns (etaf-screensaver--session-window-columns session)
-                  :rows (etaf-screensaver--session-window-rows session)
-                  :backgrounds (mapcar (lambda (work) (plist-get (etaf-screensaver--session-item work) :background)) works)
-                  :titles (mapcar (lambda (work) (etaf-screensaver--scene-title (etaf-screensaver--session-scene work))) works)
-                  :pack-title (plist-get item :pack-title)))
+           (if (eq style 'full)
+               (etaf-screensaver--session-scene-rows session)
+             (let* ((context (or (etaf-screensaver--session-composition-context session)
+                                 (setf (etaf-screensaver--session-composition-context session)
+                                       (list :layout (etaf-screensaver--session-layout session)
+                                             :columns (etaf-screensaver--session-window-columns session)
+                                             :rows (etaf-screensaver--session-window-rows session)
+                                             :backgrounds (mapcar (lambda (work) (plist-get (etaf-screensaver--session-item work) :background)) works)
+                                             :titles (mapcar (lambda (work) (etaf-screensaver--scene-title (etaf-screensaver--session-scene work))) works)
+                                             :pack-title (plist-get item :pack-title) :clock nil))))
+                    (clock (and (eq style 'band) (format-time-string "%H:%M"))))
+               (when (or (null (etaf-screensaver--session-template session))
+                         (not (equal clock (plist-get context :clock))))
+                 (setf (plist-get context :clock) clock
+                       (etaf-screensaver--session-template session)
+                       (etaf-screensaver--presentation-template style context)))
+               (etaf-screensaver--presentation-compose
+                (mapcar (lambda (work) (etaf-screensaver--session-scene-rows work t)) works)
+                context (etaf-screensaver--session-template session))))
            "\n"))))
 
 (defun etaf-screensaver--session-select (session item seed)
@@ -116,6 +133,8 @@
                   (max 1 (length tiles))))
          (slot (car (plist-get layout :slots))))
     (setf (etaf-screensaver--session-layout session) layout
+          (etaf-screensaver--session-composition-context session) nil
+          (etaf-screensaver--session-template session) nil
           (etaf-screensaver--session-columns session) (nth 2 slot)
           (etaf-screensaver--session-rows session) (nth 3 slot)
           (etaf-screensaver--session-item session) item
@@ -193,6 +212,8 @@
       (setf (etaf-screensaver--session-window-columns session) columns
             (etaf-screensaver--session-window-rows session) rows
             (etaf-screensaver--session-layout session) layout
+            (etaf-screensaver--session-composition-context session) nil
+            (etaf-screensaver--session-template session) nil
             (etaf-screensaver--session-columns session) (nth 2 slot)
             (etaf-screensaver--session-rows session) (nth 3 slot))
       (cond

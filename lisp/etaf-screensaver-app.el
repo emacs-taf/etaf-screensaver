@@ -34,7 +34,7 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program configured-seed resumable queue random-state seed index deadline last-time)
+  program configured-seed resumable queue random-state seed index deadline last-time focus)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
@@ -104,11 +104,16 @@ neither consume nor replace this position.")
         (etaf-screensaver-stop)))))
 
 (defun etaf-screensaver--focus-changed ()
-  "Release the presentation when its frame loses keyboard focus."
-  (when (and etaf-screensaver--active
-             (eq (frame-focus-state
-                  (etaf-screensaver--presentation-frame etaf-screensaver--active)) nil))
-    (etaf-screensaver-stop)))
+  "Release the presentation when its frame actually loses keyboard focus.
+The global notification also runs for other frames.  A manually started
+background preview must not mistake an unchanged nil focus for a loss."
+  (when-let* ((owner etaf-screensaver--active))
+    (let ((focus (frame-focus-state (etaf-screensaver--presentation-frame owner))))
+      (when (memq focus '(t nil))
+        (let ((previous (etaf-screensaver--presentation-focus owner)))
+          (setf (etaf-screensaver--presentation-focus owner) focus)
+          (when (and (eq previous t) (null focus))
+            (etaf-screensaver-stop)))))))
 
 (defun etaf-screensaver--frame-deleted (frame)
   "Release the presentation if its FRAME is being deleted."
@@ -231,7 +236,7 @@ This is a visual screensaver, not an operating-system security lock."
                            (max 1 (window-body-height)) buffer)
                   owner (etaf-screensaver--presentation-new
                          :session session :frame frame :configuration configuration
-                         :origin-buffer origin-buffer
+                         :focus (frame-focus-state frame) :origin-buffer origin-buffer
                          :program tree :queue queue :random-state rng :seed seed
                          :configured-seed etaf-screensaver-seed :resumable (null program)
                          :index (if resume (plist-get resume :index) 0)

@@ -66,10 +66,28 @@ functions are callable; an unknown function, variable or form signals
                  (setq result (etaf-screensaver--expr-eval (pop rest) environment)))
                result))
         ('not (not (etaf-screensaver--expr-eval (nth 1 expression) environment)))
-        (_ (let (arguments)
-             (dolist (argument (cdr expression))
-               (push (etaf-screensaver--expr-eval argument environment) arguments))
-             (etaf-screensaver--expr-call operator (nreverse arguments)))))))
+        (_
+         ;; Dense fields evaluate the same arithmetic thousands of times.
+         ;; Avoid a temporary argument list for the common unary/binary
+         ;; forms, retaining the existing variadic/error path for all others.
+         (cond
+          ((and (= (length expression) 2)
+                (memq operator '(sin cos tan abs floor ceiling round float sqrt)))
+           (let ((value (etaf-screensaver--expr-eval (cadr expression) environment)))
+             (if (eq operator 'sqrt) (sqrt (float value))
+               (funcall operator value))))
+          ((and (= (length expression) 3)
+                (memq operator '(+ - * / min max pow)))
+           (let ((a (etaf-screensaver--expr-eval (cadr expression) environment))
+                 (b (etaf-screensaver--expr-eval (caddr expression) environment)))
+             (pcase operator
+               ('/ (/ (float a) (float b)))
+               ('pow (expt a b))
+               (_ (funcall operator a b)))))
+          (t (let (arguments)
+               (dolist (argument (cdr expression))
+                 (push (etaf-screensaver--expr-eval argument environment) arguments))
+               (etaf-screensaver--expr-call operator (nreverse arguments)))))))))
    (t (etaf-screensaver--fail "Invalid scene expression: %S" expression))))
 
 (defun etaf-screensaver--expr-call (function arguments)
@@ -113,6 +131,77 @@ functions are callable; an unknown function, variable or form signals
                (floor (* (float (car arguments)) (funcall etaf-screensaver--dsl-random)))
              (if (zerop (funcall etaf-screensaver--dsl-random)) 0 1)))
     (_ (etaf-screensaver--fail "Unknown scene function: %S" function))))
+
+(defun etaf-screensaver--field-expression (expression environment coordinates columns rows)
+  "Plan EXPRESSION against stable ENVIRONMENT bindings for a dense field.
+COORDINATES holds column, row and render generation.  Return (DEPENDENCIES .
+THUNK); dependency bits are x=1, y=2, changing globals=4 and randomness=8.
+Pure subexpressions reuse their exact values along invariant axes.  Random
+calls and short-circuit branches retain their evaluation order.  This builds
+closures over the same whitelist, not executable Lisp from scene data."
+  (if (not (consp expression))
+      (let ((cell (and (symbolp expression) (assq expression environment))))
+        (cons (pcase expression ('x 1) ('y 2) ((or 't 'dt 'tick) 4) (_ 0))
+              (if cell (lambda () (cdr cell))
+                (lambda () (etaf-screensaver--expr-eval expression environment)))))
+    (let* ((operator (car expression))
+           (children (mapcar (lambda (child)
+                               (etaf-screensaver--field-expression
+                                child environment coordinates columns rows))
+                             (cdr expression)))
+           (dependencies (apply #'logior (if (memq operator '(rnd rndi)) 8 0)
+                                (mapcar #'car children)))
+           (functions (mapcar #'cdr children))
+           (first (or (nth 0 functions) (lambda () nil)))
+           (second (or (nth 1 functions) (lambda () nil)))
+           (third (nth 2 functions))
+           (compute
+            (cond
+             ((eq operator 'if)
+              (lambda () (if (funcall first) (funcall second)
+                           (when third (funcall third)))))
+             ((eq operator 'and)
+              (lambda () (let ((rest functions) (value t))
+                           (while (and rest value) (setq value (funcall (pop rest))))
+                           value)))
+             ((eq operator 'or)
+              (lambda () (let ((rest functions) value)
+                           (while (and rest (not value)) (setq value (funcall (pop rest))))
+                           value)))
+             ((eq operator 'not) (lambda () (not (funcall first))))
+             ((and (= (length functions) 1)
+                   (memq operator '(sin cos tan abs floor ceiling round float sqrt)))
+              (lambda () (let ((value (funcall first)))
+                           (if (eq operator 'sqrt) (sqrt (float value))
+                             (funcall operator value)))))
+             ((and (= (length functions) 2)
+                   (memq operator '(+ - * / min max pow)))
+              (lambda () (let ((a (funcall first)) (b (funcall second)))
+                           (pcase operator
+                             ('/ (/ (float a) (float b)))
+                             ('pow (expt a b))
+                             (_ (funcall operator a b))))))
+             (t (lambda () (etaf-screensaver--expr-call
+                            operator (mapcar #'funcall functions)))))))
+      (cons
+       dependencies
+       ;; A changing two-dimensional result is used once per cell, and a
+       ;; random result must never be reused.  Cache only invariant work.
+       (if (or (/= 0 (logand dependencies 8)) (= dependencies 7)) compute
+         (let* ((axes (logand dependencies 3))
+                (size (pcase axes (0 1) (1 columns) (2 rows) (_ (* columns rows))))
+                (values (make-vector size nil))
+                (generations (make-vector size nil)))
+           (lambda ()
+             (let ((index (pcase axes
+                            (0 0) (1 (aref coordinates 0)) (2 (aref coordinates 1))
+                            (_ (+ (aref coordinates 0) (* columns (aref coordinates 1))))))
+                   (generation (if (= 0 (logand dependencies 4)) 0
+                                 (aref coordinates 2))))
+               (unless (eq (aref generations index) generation)
+                 (aset values index (funcall compute))
+                 (aset generations index generation))
+               (aref values index)))))))))
 
 (defun etaf-screensaver--dsl-globals (context)
   "Return the global expression bindings of CONTEXT."
