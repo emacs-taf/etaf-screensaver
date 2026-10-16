@@ -68,6 +68,61 @@
                                                (plist-get spec :foreground))))))))
         (should (equal color "#00FF00"))))))
 
+(ert-deftest etaf-screensaver-presentation-tests-sparse-frames-clear-cells ()
+  "Moving sparse layers leave no old glyphs, wide continuations or colors."
+  (etaf-screensaver-presentation-tests--clean
+    (etaf-screensaver-register-scene
+     '(:id presentation-sparse :frame-rate 40
+       :layers ((:kind particles :count 1
+                 :draw (:x (if (< tick 2) 0 3) :y 0
+                        :char (if (< tick 2) "中" "X")
+                        :color (if (< tick 2) "#FF0000" nil))))))
+    (cl-labels ((red-p (text)
+                  (let ((position 0) found)
+                    (while (< position (length text))
+                      (let ((face (get-text-property position 'face text)))
+                        (when (cl-some
+                               (lambda (spec)
+                                 (and (listp spec)
+                                      (equal (plist-get spec :foreground) "#FF0000")))
+                               (if (keywordp (car-safe face)) (list face) face))
+                          (setq found t)))
+                      (setq position (next-single-property-change
+                                      position 'face text (length text))))
+                    found)))
+      (let* ((buffer (etaf-screensaver-start 'presentation-sparse))
+             (snapshot (with-current-buffer buffer
+                         (buffer-substring (point-min) (point-max))))
+             (original (copy-sequence snapshot))
+             (initial-wide (string-match-p "中" snapshot))
+             (initial-red (red-p snapshot)))
+        (should initial-wide)
+        (should initial-red)
+        (etaf-screensaver-presentation-tests--wait
+         (lambda () (>= (plist-get (etaf-screensaver-status) :ticks) 3)))
+        (dolist (margins '((0 0) (5 5) (0 0)))
+          (apply #'set-window-margins nil margins)
+          (let ((columns (1- (window-body-width))))
+            (etaf-screensaver-presentation-tests--wait
+             (lambda () (= (plist-get (etaf-screensaver-status) :columns) columns)))
+            (with-current-buffer buffer
+              (let* ((text (buffer-substring (point-min) (point-max)))
+                     (old-glyph (string-match-p "中" text))
+                     (old-color (red-p text))
+                     (position (string-match "X" text))
+                     (expected (etaf-string-pixel-width "   ")))
+                (should-not old-glyph)
+                (should-not old-color)
+                (should position)
+                (let ((prefix-width (etaf-string-pixel-width (substring text 0 position))))
+                  (should (= prefix-width expected)))))
+            (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+                   (expected (* columns (plist-get metrics :char-width))))
+              (dolist (width (etaf-screensaver-presentation-tests--row-widths buffer))
+                (should (= width expected))))))
+        (let ((unchanged (equal-including-properties snapshot original)))
+          (should unchanged))))))
+
 (defmacro etaf-screensaver-presentation-tests--work (id label)
   "Register a public test work ID with its own moving LABEL."
   `(etaf-screensaver-define-scene ,id

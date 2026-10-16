@@ -54,7 +54,12 @@ can clip all old glyphs, and the newly fitted rows must still replace them.
 
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
-width. Composition preserves wide-character continuation cells and merges
+width. Each DSL scene owns one scratch canvas for its current dimensions;
+render clears its character and color vectors, including wide-character
+continuations, before drawing any layers. Resize replaces that storage.
+Composed row strings remain independent of the scratch vectors, so clearing
+the next frame cannot change published or outgoing-page snapshots.
+Composition preserves wide-character continuation cells and merges
 adjacent colors. Row projection builds one string, omits continuation cells
 and paints color spans directly instead of joining per-cell or per-color
 strings. The expression interpreter evaluates only its whitelist;

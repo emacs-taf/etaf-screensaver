@@ -451,7 +451,9 @@ be interpreted."
           :create
           (lambda (context)
             (let ((etaf-screensaver--dsl-random (plist-get context :random)))
-              (list :layers
+              (list :canvas (etaf-screensaver--canvas-create
+                             (plist-get context :columns) (plist-get context :rows))
+                    :layers
                     (mapcar (lambda (layer)
                               (cons layer
                                     (when-let* ((create (etaf-screensaver--layer-function
@@ -468,9 +470,12 @@ be interpreted."
           :render
           (lambda (state context)
             (let ((etaf-screensaver--dsl-random (plist-get context :random))
-                  (canvas (etaf-screensaver--canvas-create
-                           (plist-get context :columns)
-                           (plist-get context :rows))))
+                  (canvas (plist-get state :canvas)))
+              ;; Only scratch cells are reused.  Composition makes fresh row
+              ;; strings, so the next clear cannot alter published snapshots.
+              (fillarray (etaf-screensaver--canvas-chars canvas) ?\s)
+              (fillarray (etaf-screensaver--canvas-faces canvas) nil)
+              (setf (etaf-screensaver--canvas-colored canvas) nil)
               (dolist (entry (plist-get state :layers))
                 (when-let* ((draw (etaf-screensaver--layer-function
                                    (plist-get (car entry) :kind) :draw)))
@@ -478,6 +483,9 @@ be interpreted."
               (etaf-screensaver--canvas-compose canvas)))
           :resize
           (lambda (state context)
+            (setf (plist-get state :canvas)
+                  (etaf-screensaver--canvas-create
+                   (plist-get context :columns) (plist-get context :rows)))
             (let ((etaf-screensaver--dsl-random (plist-get context :random)))
               (dolist (entry (plist-get state :layers))
                 (let* ((kind (plist-get (car entry) :kind))
