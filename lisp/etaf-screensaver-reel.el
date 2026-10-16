@@ -315,68 +315,81 @@ size is read from the first frame that needs it and cached."
         (aset (plist-get state :image-types) index type)
         type)))
 
+(cl-defstruct (etaf-screensaver--reel-image-layout
+               (:constructor etaf-screensaver--reel-image-layout-new))
+  key properties rows runs start end)
+
+(defun etaf-screensaver--reel-image-layout-create (key)
+  "Build reusable logical rows and read-only slice geometry for KEY."
+  (cl-destructuring-bind (source-width source-height columns rows char-width line-height ascent) key
+    (let* ((canvas-width (* columns char-width))
+           (canvas-height (* rows line-height))
+           (fit (min (/ (float canvas-width) source-width)
+                     (/ (float canvas-height) source-height)))
+           ;; Align the displayed frame to whole character rows.  A partial
+           ;; last slice bleeds into the next line, so derive the scale from
+           ;; the aligned height and let the width follow it.
+           (height (max 1 (if (< (* source-height fit) line-height)
+                              (floor (* source-height fit))
+                            (* line-height (floor (* source-height fit) line-height)))))
+           (scale (/ (float height) source-height))
+           (width (max char-width (round (* source-width scale))))
+           (offset-x (max 0 (/ (- canvas-width width) 2)))
+           (offset-y (* line-height (max 0 (/ (- rows (ceiling height line-height)) 2))))
+           (pad (min (1- columns) (max 0 (/ offset-x char-width))))
+           (span (min (- columns pad) (max 1 (ceiling width char-width))))
+           (slack (- (* span char-width) width))
+           (spacer (and (> span 1) (> slack 0)))
+           (end (+ pad (if spacer (1- span) span)))
+           lines runs)
+      (dotimes (row rows)
+        (let ((text (make-string columns ?\s))
+              (y (- (* row line-height) offset-y)))
+          (when (and (>= y 0) (< y height))
+            (push (cons text (list 'slice 0 y width (min line-height (- height y)))) runs)
+            ;; Reserve the exact cell footprint without stretching the image:
+            ;; the last cell supplies its fractional-column rounding slack.
+            (when spacer
+              (put-text-property end (1+ end) 'display
+                                 (list 'space :width (list slack)) text)))
+          (push text lines)))
+      (etaf-screensaver--reel-image-layout-new
+       :key key :properties (list :scale scale :max-width width :max-height height :ascent ascent)
+       :rows (nreverse lines) :runs (nreverse runs) :start pad :end end))))
+
 (defun etaf-screensaver--reel-image-rows (state context)
   "Return STATE's current image frame as centered canvas rows.
-The image is scaled to fit inside the canvas, centered both ways and cropped
-per character row with a display slice, so it occupies its own rows without
-moving the layout around it."
+Reuse only the current geometry's logical text, including both margins.
+Each frame replaces display values, never mutating a descriptor or slice
+already shared with a published row or frozen outgoing page."
   (let* ((index (plist-get state :index))
          (file (aref (plist-get state :image-frames) index))
          (native (etaf-screensaver--reel-image-size state index))
          (metrics (plist-get context :metrics))
-         (char-width (max 1 (or (plist-get metrics :char-width) (frame-char-width))))
-         (line-height (max 1 (or (plist-get metrics :line-height) (frame-char-height))))
-         (ascent (or (plist-get metrics :ascent) 82))
-         (columns (max 1 (plist-get context :columns)))
-         (rows (max 1 (plist-get context :rows)))
-         (canvas-width (* columns char-width))
-         (canvas-height (* rows line-height))
-         (source-width (max 1 (car native)))
-         (source-height (max 1 (cdr native)))
-         (fit (min (/ (float canvas-width) source-width)
-                   (/ (float canvas-height) source-height)))
-         ;; Align the displayed frame to whole character rows.  A partial last
-         ;; slice is positioned by its own ascent and bleeds into the line
-         ;; below, and a scale derived from the width can round the displayed
-         ;; height past the aligned value, so derive the scale from the
-         ;; aligned height and let the width follow it.
-         (height (max 1 (if (< (* source-height fit) line-height)
-                            (floor (* source-height fit))
-                          (* line-height (floor (* source-height fit) line-height)))))
-         (scale (/ (float height) source-height))
-         (width (max char-width (round (* source-width scale))))
-         (offset-x (max 0 (/ (- canvas-width width) 2)))
-         (offset-y (* line-height (max 0 (/ (- rows (ceiling height line-height)) 2))))
-         (pad (min (1- columns) (max 0 (/ offset-x char-width))))
-         (span (min (- columns pad) (max 1 (ceiling width char-width))))
-         (slack (- (* span char-width) width))
-         (spacer (and (> span 1) (> slack 0)))
-         (type (etaf-screensaver--reel-image-type state index))
-         (properties (list :scale scale :max-width width :max-height height :ascent ascent))
-         (image
-          (if (image-type-available-p type)
-              (apply #'create-image file type nil properties)
-            (if (display-graphic-p)
-                (etaf-screensaver--fail "No image decoder for %s: %s" type file)
-              ;; A headless projection can retain standard image descriptors
-              ;; without decoding pixels; the public buffer remains testable.
-              (append (list 'image :type type :file file) properties)))))
-    (cl-loop for row below rows
-             collect
-             (let ((y (- (* row line-height) offset-y)))
-               (if (or (< y 0) (>= y height))
-                   ""
-                 (concat (make-string pad ?\s)
-                         (propertize (make-string (if spacer (1- span) span) ?\s) 'display
-                                     (list (list 'slice 0 y width
-                                                 (min line-height (- height y)))
-                                           image))
-                         ;; Reserve the image's exact cell footprint without
-                         ;; stretching it: the last cell supplies only the
-                         ;; fractional-column slack left by the image width.
-                         (if spacer
-                             (propertize " " 'display (list 'space :width (list slack)))
-                           "")))))))
+         (key (list (max 1 (car native)) (max 1 (cdr native))
+                    (max 1 (plist-get context :columns)) (max 1 (plist-get context :rows))
+                    (max 1 (or (plist-get metrics :char-width) (frame-char-width)))
+                    (max 1 (or (plist-get metrics :line-height) (frame-char-height)))
+                    (or (plist-get metrics :ascent) 82)))
+         (layout (plist-get state :image-layout)))
+    (unless (and layout (equal key (etaf-screensaver--reel-image-layout-key layout)))
+      (setq layout (etaf-screensaver--reel-image-layout-create key))
+      (setf (plist-get state :image-layout) layout))
+    (let* ((type (etaf-screensaver--reel-image-type state index))
+           (properties (etaf-screensaver--reel-image-layout-properties layout))
+           (image
+            (if (image-type-available-p type)
+                (apply #'create-image file type nil properties)
+              (if (display-graphic-p)
+                  (etaf-screensaver--fail "No image decoder for %s: %s" type file)
+                ;; Headless publication retains a normal descriptor without
+                ;; decoding pixels; the public buffer remains testable.
+                (append (list 'image :type type :file file) properties)))))
+      (dolist (run (etaf-screensaver--reel-image-layout-runs layout))
+        (put-text-property (etaf-screensaver--reel-image-layout-start layout)
+                           (etaf-screensaver--reel-image-layout-end layout)
+                           'display (list (cdr run) image) (car run))))
+    (etaf-screensaver--reel-image-layout-rows layout)))
 
 (defun etaf-screensaver--reel-text-rows (state context)
   "Return STATE's current text frame fitted into CONTEXT's canvas.
@@ -470,7 +483,7 @@ A scene duration shorter than the recording loops it from the start."
                              (> (car size) 0) (> (cdr size) 0))
                   (etaf-screensaver--fail "Reel %s reports an invalid image size" id))))
             (list :kind 'image :image-frames images :image-size (plist-get data :image-size)
-                  :image-sizes (make-vector count nil)
+                  :image-sizes (make-vector count nil) :image-layout nil
                   :image-types (if types (copy-sequence types) (make-vector count nil))
                   :durations durations :index 0 :clock 0.0))
         (progn

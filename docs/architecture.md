@@ -101,7 +101,13 @@ broken spec without disturbing the others.
 Text recordings render as canvas rows; image recordings take a second path.
 The `frames` provider returns image file names and a pixel size; the reel
 layer scales each frame to fit the canvas, centers it on whole character rows and crops it per row with a `display`
-slice, the same retained Host boundary ETAF video uses. Composition reserves
+slice, the same retained Host boundary ETAF video uses. Each playing reel keeps
+only its current geometry's logical row template, including blank rows and both
+margins. Native image size, viewport and character/line/ascent metrics determine
+that geometry. Frames replace each row's display value with a fresh image
+descriptor and a read-only slice; they never mutate values shared with earlier
+publication or outgoing-page snapshots. A geometry change replaces the template,
+not an accumulating cache of frames. Composition reserves
 each image run's full cell footprint for character-grid clipping. Publication
 projects that replacing run as one glyph with the same image slice; its known
 pixel width avoids measuring a long replaced string on every frame. A fixed

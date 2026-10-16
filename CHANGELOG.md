@@ -66,8 +66,8 @@
   timer delay; late frames skip expired slots and natural page deadlines stay
   independent of the outgoing frame's timing.
 
-- Gallery playback avoids repeated image-width measurement and per-cell
-  rendering allocations for empty margins while preserving frame size,
+- Gallery playback reuses fitted image rows and avoids repeated image-width
+  measurement and per-cell rendering allocations for empty margins while preserving frame size,
   letterboxing, clipping, styled blank widths and aligned mosaic borders.
 
 - Image-bundle imports recognize file headers even in a headless Emacs build.

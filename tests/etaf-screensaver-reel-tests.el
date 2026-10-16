@@ -289,35 +289,53 @@
 (defun etaf-screensaver-reel-tests--display-image (buffer)
   "Return the image file BUFFER displays, or nil."
   (with-current-buffer buffer
-    (let ((position (next-single-property-change (point-min) 'display)))
-      (when position
-        (let ((display (get-text-property position 'display)))
-          (when (and (consp display) (consp (cdr display)))
-            (let ((image (cadr display)))
-              (when (eq (car-safe image) 'image)
-                (image-property image :file)))))))))
+    (let ((position (point-min)) file)
+      (while (and (< position (point-max)) (null file))
+        (let* ((display (get-text-property position 'display))
+               (image (car-safe (cdr-safe display))))
+          (when (eq (car-safe image) 'image)
+            (setq file (image-property image :file))))
+        (setq position (next-single-property-change position 'display nil (point-max))))
+      file)))
+
+(defun etaf-screensaver-reel-tests--displays (text)
+  "Return TEXT's display values, without copying their descriptors."
+  (let ((position 0) displays)
+    (while (< position (length text))
+      (let ((display (get-text-property position 'display text)))
+        (when display (push display displays)))
+      (setq position (next-single-property-change position 'display text (length text))))
+    (nreverse displays)))
 
 (ert-deftest etaf-screensaver-reel-tests-image-frames-advance ()
-  "Baked image frames publish display slices that advance in order."
+  "Images advance in every layout without changing earlier publication values."
   (etaf-screensaver-reel-tests--clean
     (let ((manifest (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
       (etaf-screensaver-register-reel
        (list :id 'reel-test-image :provider 'frames :recording manifest
              :title "Baked fixture" :frame-rate 10))
-      (let* ((buffer (etaf-screensaver-start 'reel-test-image))
-             (first (etaf-screensaver-reel-tests--display-image buffer))
-             (deadline (+ (float-time) 3)))
-        (should (member (file-name-nondirectory first)
-                        '("frame-a.png" "frame-b.png")))
-        (while (and (< (float-time) deadline)
-                    (equal (etaf-screensaver-reel-tests--display-image buffer) first))
-          (sleep-for 0.02))
-        (let ((second (etaf-screensaver-reel-tests--display-image buffer)))
-          (should (member (file-name-nondirectory second)
+      (dolist (style '(full card band mosaic))
+        (let* ((buffer (etaf-screensaver-start
+                        (list :presentation style :scenes
+                              (make-list (if (eq style 'mosaic) 4 1) 'reel-test-image))))
+               (first (etaf-screensaver-reel-tests--display-image buffer))
+               (snapshot (with-current-buffer buffer (buffer-substring (point-min) (point-max))))
+               (expected (copy-tree (etaf-screensaver-reel-tests--displays snapshot)))
+               (deadline (+ (float-time) 3)))
+          (should (member (file-name-nondirectory first)
                           '("frame-a.png" "frame-b.png")))
-          (should-not (equal first second)))
-        (etaf-screensaver-stop)
-        (should-not (plist-get (etaf-screensaver-status) :active))))))
+          (while (and (< (float-time) deadline)
+                      (equal (etaf-screensaver-reel-tests--display-image buffer) first))
+            (sleep-for 0.02))
+          (let ((second (etaf-screensaver-reel-tests--display-image buffer))
+                (retained (etaf-screensaver-reel-tests--displays snapshot)))
+            (should (member (file-name-nondirectory second)
+                            '("frame-a.png" "frame-b.png")))
+            (should-not (equal first second))
+            (should expected)
+            (should (equal retained expected)))
+          (etaf-screensaver-stop)
+          (should-not (plist-get (etaf-screensaver-status) :active)))))))
 
 (ert-deftest etaf-screensaver-reel-tests-imports-frame-bundle ()
   "Importing a frame bundle copies every file and plays the reel."
