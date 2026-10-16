@@ -17,6 +17,7 @@
 (require 'subr-x)
 (require 'etaf-screensaver-model)
 (require 'etaf-screensaver-ansi)
+(declare-function image-size "image.c" (spec &optional pixels frame))
 
 (defvar etaf-screensaver--reel-directory nil
   "Directory of the reel file being read, used to resolve :recording.")
