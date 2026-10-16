@@ -34,7 +34,8 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program configured-seed resumable queue random-state seed index deadline last-time focus transition-duration)
+  program configured-seed resumable queue random-state seed index deadline last-time focus transition-duration
+  read-ahead)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
@@ -145,13 +146,39 @@ background preview must not mistake an unchanged nil focus for a loss."
            (etaf-screensaver--session-background
             (etaf-screensaver--presentation-session owner))))))
 
+(defun etaf-screensaver--read-ahead (owner now)
+  "Give OWNER's next queued page one bounded metadata chunk at time NOW.
+Peek only: no scene creation, playlist expansion, RNG advance or extra timer."
+  (when (and (etaf-screensaver--presentation-queue owner)
+             (<= (- (etaf-screensaver--presentation-deadline owner) now) 6))
+    (unless (etaf-screensaver--presentation-read-ahead owner)
+      (let ((item (car (etaf-screensaver--presentation-queue owner))))
+        (setf (etaf-screensaver--presentation-read-ahead owner)
+              (cons item
+                    (cl-loop for tile in (or (plist-get item :tiles) (list item))
+                             for source = (etaf-screensaver--scene-reel-source
+                                           (plist-get tile :definition))
+                             when source collect
+                             (etaf-screensaver--frames-preparation-new :source source))))))
+    ;; At most one reader/chunk per callback, including a four-work mosaic.
+    (when-let* ((preparation
+                 (cl-find-if-not #'etaf-screensaver--frames-preparation-done
+                                 (cdr (etaf-screensaver--presentation-read-ahead owner)))))
+      (etaf-screensaver--frames-prepare-step preparation))))
+
 (defun etaf-screensaver--next (owner now)
   "Select OWNER's next item at wall time NOW."
   (unless (etaf-screensaver--presentation-queue owner)
     (setf (etaf-screensaver--presentation-queue owner)
           (etaf-screensaver--program-round (etaf-screensaver--presentation-program owner)
                                            (etaf-screensaver--presentation-random-state owner))))
-  (let ((item (pop (etaf-screensaver--presentation-queue owner))))
+  (let ((item (car (etaf-screensaver--presentation-queue owner)))
+        (prepared (etaf-screensaver--presentation-read-ahead owner)))
+    (setf (etaf-screensaver--presentation-read-ahead owner) nil)
+    (when (eq item (car prepared))
+      (dolist (preparation (cdr prepared))
+        (etaf-screensaver--frames-prepare-finish preparation)))
+    (pop (etaf-screensaver--presentation-queue owner))
     (cl-incf (etaf-screensaver--presentation-index owner))
     (etaf-screensaver--session-select
      (etaf-screensaver--presentation-session owner) item
@@ -196,7 +223,8 @@ background preview must not mistake an unchanged nil focus for a loss."
               (if (>= now (etaf-screensaver--presentation-deadline owner))
                   (progn (etaf-screensaver--next owner now)
                          (etaf-screensaver--session-publish session))
-                (etaf-screensaver--session-advance session dt))
+                (etaf-screensaver--session-advance session dt)
+                (etaf-screensaver--read-ahead owner now))
               (setf (etaf-screensaver--presentation-last-time owner) now))
             (etaf-screensaver--arm-frame owner)))
       (quit (etaf-screensaver-stop))
@@ -329,7 +357,8 @@ idle watcher and rearming hook remain, waiting a fresh idle interval."
     (setq etaf-screensaver--active nil)
     (when (timerp (etaf-screensaver--presentation-timer owner))
       (cancel-timer (etaf-screensaver--presentation-timer owner)))
-    (setf (etaf-screensaver--presentation-timer owner) nil)
+    (setf (etaf-screensaver--presentation-timer owner) nil
+          (etaf-screensaver--presentation-read-ahead owner) nil)
     (remove-hook 'pre-command-hook #'etaf-screensaver--wake-before-command)
     (remove-hook 'window-configuration-change-hook #'etaf-screensaver--window-changed)
     (remove-hook 'delete-frame-functions #'etaf-screensaver--frame-deleted)

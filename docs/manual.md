@@ -548,9 +548,15 @@ A provider for another tool registers a reader:
 nonempty `:frames` vector of frame strings whose rows have exactly that
 width; optional `:durations` gives seconds per frame, `:ansi` marks SGR runs
 and `:source` names the work. Providers are trusted code and run in the
-presentation's thread. Recordings are read once when their scene starts and
-recent unchanged reads are cached, so a registered but unused reel holds only
-metadata, and an invalid recording reports at import or at first playback.
+presentation's thread. Custom providers are read when their scene starts;
+recent unchanged reads are cached. Registration itself holds only metadata.
+The built-in image reader can validate the next queued page in small chunks
+while the current page plays, without creating another timer or decoding
+images early. Remaining validation completes at selection. A broken next
+page does not interrupt the current work early: it reports and stops when
+selected. Stopping discards unfinished reads; changing a manifest's size or
+modification time invalidates prepared metadata. Import always validates
+again, including assets changed without a manifest edit.
 
 ### Baking image recordings
 

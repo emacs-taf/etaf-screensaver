@@ -9,8 +9,9 @@
 ;; format into frames; the reel layer owns pacing, center fitting and the
 ;; lazy conversion shared by every provider.  Recording bytes stay in their
 ;; native format: importing references and copies them, it does not
-;; transcode them.  Frames are read when the reel's scene is created, so an
-;; unused reel costs nothing after registration.
+;; transcode them.  Registration retains metadata only.  Built-in image
+;; bundles can validate the next queued page incrementally during playback;
+;; other providers are read when their scene is created.
 
 ;;; Code:
 (require 'cl-lib)
@@ -109,6 +110,22 @@ not decoded images.  The shared budget bounds their aggregate retention.")
             (cl-incf total (string-bytes (aref frames index)))))))
     total))
 
+(defun etaf-screensaver--reel-cache-put (key data)
+  "Admit validated DATA under KEY within the shared read-cache budget."
+  (let ((size (etaf-screensaver--reel-data-size data)))
+    (when (<= size etaf-screensaver--reel-read-cache-bytes)
+      (let ((remaining etaf-screensaver--reel-read-cache-bytes)
+            (count 0) kept)
+        (dolist (entry (cons (list key size data)
+                            (assoc-delete-all key etaf-screensaver--reel-read-cache)))
+          (when (and (< count etaf-screensaver--reel-read-cache-limit)
+                     (<= (nth 1 entry) remaining))
+            (cl-incf count)
+            (cl-decf remaining (nth 1 entry))
+            (push entry kept)))
+        (setq etaf-screensaver--reel-read-cache (nreverse kept)))))
+  data)
+
 (defun etaf-screensaver--reel-read (provider-id provider file)
   "Read FILE through PROVIDER, reusing a recent unchanged result.
 Read errors are not cached.  Recent recordings share one payload budget;
@@ -120,19 +137,7 @@ image manifests retain paths only, never decoded frames."
           (setq etaf-screensaver--reel-read-cache
                 (cons cached (delq cached etaf-screensaver--reel-read-cache)))
           (nth 2 cached))
-      (let* ((data (funcall (plist-get provider :read) file))
-             (size (etaf-screensaver--reel-data-size data)))
-        (when (<= size etaf-screensaver--reel-read-cache-bytes)
-          (let ((remaining etaf-screensaver--reel-read-cache-bytes)
-                (count 0) kept)
-            (dolist (entry (cons (list key size data) etaf-screensaver--reel-read-cache))
-              (when (and (< count etaf-screensaver--reel-read-cache-limit)
-                         (<= (nth 1 entry) remaining))
-                (cl-incf count)
-                (cl-decf remaining (nth 1 entry))
-                (push entry kept)))
-            (setq etaf-screensaver--reel-read-cache (nreverse kept))))
-        data))))
+      (etaf-screensaver--reel-cache-put key (funcall (plist-get provider :read) file)))))
 
 (defun etaf-screensaver--reel-file (recording)
   "Return RECORDING as an absolute file name.
@@ -486,9 +491,10 @@ and :recording plus optional :title, :summary, :tags, :width, :height,
 resolved relative to the reel file's directory.  Registering the same :id
 again replaces the previous scene in place.
 
-The scene reads the recording when it is created, so a registered but unused
-reel holds only metadata.  Playback follows the recording's own per-frame
-timing and centers its fixed canvas; a smaller canvas crops both edges."
+Registration holds only metadata.  Playback reads the recording at scene
+creation, or incrementally for the next queued built-in image bundle.
+Playback follows the recording's own per-frame timing and centers its fixed
+canvas; a smaller canvas crops both edges."
   (let* ((reel (if (eq (car-safe spec) 'etaf-reel) (cdr spec) spec)))
     (etaf-screensaver--reel-validate reel)
     (let* ((id (plist-get reel :id))
@@ -502,27 +508,34 @@ timing and centers its fixed canvas; a smaller canvas crops both edges."
                            (and (integerp count) (> count 0) (/ (float count) rate))))))
       (unless (file-regular-p file)
         (etaf-screensaver--fail "Reel %s recording does not exist: %s" id file))
-      (etaf-screensaver--register
-       id
-       (list
-        :title title
-        :summary
-        (or (plist-get reel :summary)
-            (format "%s %s recording (%s%s); %d frames at %s fps"
-                    provider-id (if (eq (plist-get reel :kind) 'image) "image" "text")
-                    (plist-get provider :title)
-                    (if-let* ((source (plist-get reel :source)))
-                        (format ": %s" source)
-                      "")
-                    (or (plist-get reel :frame-count) 0) rate))
-        :tags (append (plist-get reel :tags) (list 'reel provider-id))
-        :frame-rate rate
-        :duration duration
-        :background (plist-get reel :background)
-        :create (lambda (_context) (etaf-screensaver--reel-create reel provider file))
-        :step #'etaf-screensaver--reel-step
-        :render #'etaf-screensaver--reel-render
-        :resize (lambda (state _context) state))))))
+      (let ((scene
+             (etaf-screensaver--register
+              id
+              (list
+               :title title
+               :summary
+               (or (plist-get reel :summary)
+                   (format "%s %s recording (%s%s); %d frames at %s fps"
+                           provider-id (if (eq (plist-get reel :kind) 'image) "image" "text")
+                           (plist-get provider :title)
+                           (if-let* ((source (plist-get reel :source)))
+                               (format ": %s" source)
+                             "")
+                           (or (plist-get reel :frame-count) 0) rate))
+               :tags (append (plist-get reel :tags) (list 'reel provider-id))
+               :frame-rate rate
+               :duration duration
+               :background (plist-get reel :background)
+               :create (lambda (_context) (etaf-screensaver--reel-create reel provider file))
+               :step #'etaf-screensaver--reel-step
+               :render #'etaf-screensaver--reel-render
+               :resize (lambda (state _context) state)))))
+        ;; This private descriptor travels with the compiled scene snapshot.
+        ;; Do not look up a replacement registration or inspect its closure.
+        ;; Custom providers retain their existing synchronous :read contract.
+        (when (eq (plist-get provider :read) 'etaf-screensaver--frames-read)
+          (setf (etaf-screensaver--scene-reel-source scene) (list provider-id provider file)))
+        scene))))
 
 (provide 'etaf-screensaver-reel)
 ;;; etaf-screensaver-reel.el ends here

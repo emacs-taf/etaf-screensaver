@@ -640,5 +640,201 @@
         (etaf-screensaver-stop)
         (delete-file file)))))
 
+(etaf-screensaver-define-scene reel-test-current
+  :frame-rate 60
+  :create (lambda (_context) nil)
+  :step (lambda (state _context) state)
+  :render (lambda (_state _context) '("CURRENT")))
+
+(defun etaf-screensaver-reel-tests--manifest (file names)
+  "Write a bounded image manifest FILE naming the fixture assets NAMES."
+  (with-temp-file file
+    (insert (json-encode (list :version 1 :width 40 :height 20
+                              :frame_rate 15 :frames (vconcat names))))))
+
+(ert-deftest etaf-screensaver-reel-tests-queued-frame-errors-are-deferred ()
+  "A broken queued bundle reports at selection, without stopping the current work early."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (file-truename (make-temp-file "frames-queued-errors-" t)))
+           (good (expand-file-name "good.png" directory))
+           (bad (expand-file-name "bad.png" directory))
+           (escape (expand-file-name "escape.png" directory))
+           (timers (copy-sequence timer-list)))
+      (unwind-protect
+          (progn
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png") good)
+            (with-temp-file bad (insert "not an image"))
+            (make-symbolic-link (etaf-screensaver-reel-tests--fixture "frames/frame-a.png") escape)
+            (dolist (name '("missing.png" "bad.png" "escape.png"))
+              (let* ((manifest (expand-file-name (concat name ".frames.json") directory))
+                     (path (expand-file-name name directory)))
+                (etaf-screensaver-reel-tests--manifest
+                 manifest (append (make-list 128 "good.png") (list name)))
+                (etaf-screensaver-register-reel
+                 (list :id 'reel-test-queued-error :provider 'frames :recording manifest))
+                (let ((buffer (etaf-screensaver-start
+                               '(:scenes ((:scene reel-test-current :duration 0.75)
+                                          reel-test-queued-error)))))
+                  (etaf-screensaver-reel-tests--wait
+                   (lambda () (>= (or (plist-get (etaf-screensaver-status) :elapsed) 0) 0.2)))
+                  (let ((status (etaf-screensaver-status)))
+                    (should (eq (plist-get status :scene) 'reel-test-current))
+                    (should (= (plist-get status :index) 0))
+                    (should (equal (plist-get status :up-next) '(reel-test-queued-error))))
+                  (should (string-match-p "CURRENT" (etaf-screensaver-reel-tests--text buffer)))
+                  (when (get-buffer "*Warnings*")
+                    (should-not (string-match-p (regexp-quote path)
+                                                (etaf-screensaver-reel-tests--text
+                                                 (get-buffer "*Warnings*")))))
+                  (etaf-screensaver-reel-tests--wait
+                   (lambda () (not (plist-get (etaf-screensaver-status) :active))))
+                  (should-not (buffer-live-p buffer))
+                  (should (string-match-p (regexp-quote path)
+                                          (etaf-screensaver-reel-tests--text
+                                           (get-buffer "*Warnings*")))))))
+            (let ((remaining (cl-set-difference timer-list timers)))
+              (should-not remaining)))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-queued-manifest-edits-and-snapshots ()
+  "Selection observes a manifest edit but keeps the compiled reel definition."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (file-truename (make-temp-file "frames-queued-edit-" t)))
+           (replacement (expand-file-name "replacement.frames.json" directory))
+           (second (expand-file-name "second.png" directory)))
+      (unwind-protect
+          (progn
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png")
+                       (expand-file-name "first.png" directory))
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-b.png") second)
+            (etaf-screensaver-reel-tests--manifest replacement '("first.png"))
+            ;; Both a successful preparation and a deferred error must become
+            ;; obsolete when the original manifest changes before selection.
+            (dolist (initial '("first.png" "absent.png"))
+              (let ((manifest (expand-file-name (concat initial ".frames.json") directory)))
+                (etaf-screensaver-reel-tests--manifest manifest (make-list 129 initial))
+                (etaf-screensaver-register-reel
+                 (list :id 'reel-test-queued-edit :provider 'frames :recording manifest))
+                (let ((buffer (etaf-screensaver-start
+                               '(:scenes ((:scene reel-test-current :duration 0.75)
+                                          (:scene reel-test-queued-edit :duration 30))))))
+                  (etaf-screensaver-reel-tests--wait
+                   (lambda () (>= (or (plist-get (etaf-screensaver-status) :elapsed) 0) 0.2)))
+                  (etaf-screensaver-register-reel
+                   (list :id 'reel-test-queued-edit :provider 'frames :recording replacement))
+                  (etaf-screensaver-reel-tests--manifest manifest '("second.png"))
+                  (etaf-screensaver-reel-tests--wait
+                   (lambda ()
+                     (equal (etaf-screensaver-reel-tests--display-image buffer) second)))
+                  (let ((status (etaf-screensaver-status)))
+                    (should (eq (plist-get status :scene) 'reel-test-queued-edit))
+                    (should (= (plist-get status :index) 1)))
+                  (etaf-screensaver-stop)))))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-queued-mosaic-completes-all-works ()
+  "A short outgoing page still validates and selects every incoming mosaic work."
+  (etaf-screensaver-reel-tests--clean
+    (let ((directory (file-truename (make-temp-file "frames-queued-wall-" t))) ids paths)
+      (unwind-protect
+          (progn
+            (dotimes (index 4)
+              (let* ((id (intern (format "reel-test-queued-wall-%d" index)))
+                     (name (format "work-%d.png" index))
+                     (path (expand-file-name name directory))
+                     (manifest (expand-file-name (concat name ".frames.json") directory)))
+                (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png") path)
+                (etaf-screensaver-reel-tests--manifest manifest (make-list 360 name))
+                (etaf-screensaver-register-reel
+                 (list :id id :provider 'frames :recording manifest :duration 30))
+                (push id ids)
+                (push path paths)))
+            (setq ids (nreverse ids))
+            (let ((buffer
+                   (etaf-screensaver-start
+                    (list :presentation 'mosaic :scenes
+                          (append (make-list 4 '(:scene reel-test-current :duration 0.08)) ids)))))
+              (etaf-screensaver-reel-tests--wait
+               (lambda () (equal (plist-get (etaf-screensaver-status) :works) ids)))
+              (etaf-screensaver-reel-tests--wait
+               (lambda () (not (plist-get (etaf-screensaver-status) :transition-progress))))
+              (let ((files (mapcar (lambda (run) (nth 4 run))
+                                   (etaf-screensaver-reel-tests--image-runs buffer))))
+                (dolist (path paths) (should (member path files))))))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-cancel-queued-read-releases-resources ()
+  "Stopping during a large queued read leaves no timer, buffer or partial cache result."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (file-truename (make-temp-file "frames-queued-cancel-" t)))
+           (manifest (expand-file-name "many.frames.json" directory))
+           (asset (expand-file-name "frame.png" directory)))
+      (unwind-protect
+          (progn
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png") asset)
+            (etaf-screensaver-reel-tests--manifest manifest (make-list 7200 "frame.png"))
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-queued-cancel :provider 'frames :recording manifest))
+            (let* ((timers (copy-sequence timer-list))
+                   (processes (process-list))
+                   (configuration (current-window-configuration))
+                   (buffer (etaf-screensaver-start
+                            '(:scenes ((:scene reel-test-current :duration 5)
+                                       reel-test-queued-cancel))))
+                   ;; Inventory after mount's lazy editor setup, but before
+                   ;; the first animation callback can start queued IO.
+                   (buffers (buffer-list)))
+              (etaf-screensaver-reel-tests--wait
+               (lambda () (>= (or (plist-get (etaf-screensaver-status) :ticks) 0) 2)))
+              (etaf-screensaver-stop)
+              (let ((new-timers (cl-set-difference timer-list timers))
+                    (new-buffers (cl-set-difference (buffer-list) buffers))
+                    (new-processes (cl-set-difference (process-list) processes))
+                    (restored (window-configuration-equal-p configuration
+                                                             (current-window-configuration))))
+                (should-not (buffer-live-p buffer))
+                (should-not new-timers)
+                (should-not new-buffers)
+                (should-not new-processes)
+                (should restored)))
+            ;; Leave the manifest unchanged: a partial read must never make
+            ;; this now-invalid asset look like a validated cache hit.
+            (with-temp-file asset (insert "invalid after cancellation"))
+            (should-error (etaf-screensaver-start 'reel-test-queued-cancel)
+                          :type 'etaf-screensaver-error))
+        (etaf-screensaver-stop)
+        (delete-directory directory t)))))
+
+(ert-deftest etaf-screensaver-reel-tests-custom-reader-runs-at-selection ()
+  "A queued custom provider reads the latest file only when its scene starts."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file)))
+      (unwind-protect
+          (progn
+            (with-temp-file file (insert "EARLY"))
+            (etaf-screensaver-define-reel-provider
+             'reel-test-late-reader :title "Selection reader" :license "Test license"
+             :extensions '("testreel") :match (lambda (path) (equal path file))
+             :read (lambda (path)
+                     (with-temp-buffer
+                       (insert-file-contents path)
+                       (list :width 5 :height 1 :frame-rate 15
+                             :frames (vector (buffer-string))))))
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-late-reader :provider 'reel-test-late-reader :recording file))
+            (let ((buffer (etaf-screensaver-start
+                           '(:scenes ((:scene reel-test-current :duration 0.75)
+                                      (:scene reel-test-late-reader :duration 30))))))
+              (etaf-screensaver-reel-tests--wait
+               (lambda () (>= (or (plist-get (etaf-screensaver-status) :elapsed) 0) 0.2)))
+              (with-temp-file file (insert "LATER"))
+              (etaf-screensaver-reel-tests--wait
+               (lambda () (string-match-p "LATER" (etaf-screensaver-reel-tests--text buffer))))))
+        (etaf-screensaver-stop)
+        (delete-file file)))))
+
 (provide 'etaf-screensaver-reel-tests)
 ;;; etaf-screensaver-reel-tests.el ends here

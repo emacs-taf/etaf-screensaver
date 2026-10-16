@@ -31,8 +31,10 @@ a list of symbols; FRAME-RATE is the scene's preferred frames per second;
 DURATION is the scene's natural length in seconds when it has one (a recorded
 reel), so a program can play it once without cutting it mid-loop; BACKGROUND
 overrides the canvas color; PARAMS is a list of validated parameter
-descriptors; CREATE, STEP, RENDER and RESIZE are the scene callbacks."
-  id title summary tags frame-rate duration background params create step render resize)
+descriptors; CREATE, STEP, RENDER and RESIZE are the scene callbacks.
+REEL-SOURCE is private built-in read-ahead metadata, set only by the reel
+registrar and retained with this definition in a compiled program."
+  id title summary tags frame-rate duration background params create step render resize reel-source)
 
 (defvar etaf-screensaver--scenes nil
   "Registered scenes in display order, as (ID . SCENE) pairs.")

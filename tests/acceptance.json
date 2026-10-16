@@ -3,6 +3,11 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-reel-tests-queued-frame-errors-are-deferred", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Missing, non-image and escaping next-page assets report only at selection, preserving the current work and releasing the animation on failure."},
+    {"name": "etaf-screensaver-reel-tests-queued-manifest-edits-and-snapshots", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Selection revalidates changed manifests, including repaired failures, while retaining the original compiled scene registration."},
+    {"name": "etaf-screensaver-reel-tests-queued-mosaic-completes-all-works", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A short outgoing dwell still validates and displays all four incoming image works in order."},
+    {"name": "etaf-screensaver-reel-tests-cancel-queued-read-releases-resources", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Dismissal during a large queued read restores windows and releases buffers, timers and processes without admitting a partial playback cache result."},
+    {"name": "etaf-screensaver-reel-tests-custom-reader-runs-at-selection", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Custom recording providers retain synchronous scene-start reads and observe file changes made during the preceding page."},
     {"name": "etaf-screensaver-reel-tests-content-signatures-and-long-headers", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Image bundles recognize PNG/JPEG content despite misleading suffixes, accept a bounded long SVG header, reject a signature beyond the bound and revalidate imports after playback."},
     {"name": "etaf-screensaver-reel-tests-image-resize-recovers-clipped-canvas", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Shrinking and expanding the drawable viewport continues publishing fitted images even when all old glyphs have been clipped."},
     {"name": "etaf-screensaver-presentation-tests-styled-blank-geometry", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Initial and animated publication preserve adjacent blank runs with different faces, their pixel widths, wide text and immutable source rows in all layouts."},

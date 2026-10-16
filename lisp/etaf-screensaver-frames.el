@@ -28,11 +28,18 @@
   "Return non-nil when FILE names an image-frame manifest."
   (and (stringp file) (string-suffix-p etaf-screensaver-frames--suffix file)))
 
-(defun etaf-screensaver--frames-read (file)
-  "Read the baked image manifest FILE and return its frames.
-The manifest holds version, width, height, frame_rate and a frames list of
-file names relative to the manifest; optional source and license describe
-the work."
+(cl-defstruct (etaf-screensaver--frames-reader
+               (:constructor etaf-screensaver--frames-reader-new))
+  "One validation cursor; it owns metadata only, never a buffer or image."
+  file directory remaining data (index 0) (bytes 0))
+
+(cl-defstruct (etaf-screensaver--frames-preparation
+               (:constructor etaf-screensaver--frames-preparation-new))
+  "One next-page read owned by a presentation, including a deferred failure."
+  source key reader data problem done)
+
+(defun etaf-screensaver--frames-read-begin (file)
+  "Validate FILE's manifest and return a cursor over its unverified assets."
   (unless (<= (file-attribute-size (file-attributes file)) (* 1024 1024))
     (etaf-screensaver--fail "Frame manifest exceeds 1 MiB: %s" file))
   (with-temp-buffer
@@ -64,53 +71,131 @@ the work."
           (etaf-screensaver--fail "Frame manifest needs 1–7200 local basenames: %s" file))
         (let* ((directory (file-name-as-directory
                            (file-truename (file-name-directory (expand-file-name file)))))
-               (paths (mapcar (lambda (name) (expand-file-name name directory)) names))
-               (bytes 0) types)
-          ;; Names have already been restricted to basenames.  Canonicalize
-          ;; the directory once; only symlinks can leave it.  Reuse one header
-          ;; buffer instead of running buffer lifecycle hooks for every image.
-          (with-temp-buffer
-            (set-buffer-multibyte nil)
-            (dolist (path paths)
-              (let ((attributes (file-attributes path)))
-                (when (stringp (file-attribute-type attributes))
-                  (let ((target (file-truename path)))
-                    (unless (file-in-directory-p target directory)
-                      (etaf-screensaver--fail "Frame file escapes its bundle: %s" path))
-                    (setq attributes (file-attributes target))))
-                (unless (and attributes (null (file-attribute-type attributes))
-                             (eq (aref (file-attribute-modes attributes) 0) ?-))
-                  (etaf-screensaver--fail "Frame file is missing or not regular: %s" path))
-                (let ((size (file-attribute-size attributes)))
-                  (cl-incf bytes size)
-                  (unless (and (<= size (* 16 1024 1024)) (<= bytes (* 1024 1024 1024)))
-                    (etaf-screensaver--fail "Frame bundle exceeds its byte limit: %s" file))))
-              (erase-buffer)
-              ;; Common binary signatures fit in a short prefix.  Longer
-              ;; textual headers retain the same bounded fallback and all
-              ;; files are still checked by content, never by their suffix.
-              (insert-file-contents-literally path nil 0 64)
-              ;; Recognize the format independently of this Emacs build's
-              ;; decoders.  Import/validation must also work in emacs-nox.
-              (let ((type (or (image-type-from-buffer)
-                              (image-type-from-data (buffer-string)))))
-                (when (and (null type) (= (buffer-size) 64))
-                  (goto-char (point-max))
-                  (insert-file-contents-literally path nil 64 8192)
-                  (setq type (or (image-type-from-buffer)
-                                 (image-type-from-data (buffer-string)))))
-                (unless type
-                  (etaf-screensaver--fail "Frame file is not a supported image: %s" path))
-                (push type types))))
-          (list :image-frames (vconcat paths)
-                :image-types (vconcat (nreverse types))
-                :image-size (cons width height)
-                :frame-rate frame-rate
-                :source (or (plist-get manifest :source)
-                            (replace-regexp-in-string
-                             "\\.frames\\'" "" (file-name-base file)))
-                :license (plist-get manifest :license)
-                :assets (cons file paths)))))))
+               (paths (mapcar (lambda (name) (expand-file-name name directory)) names)))
+          (etaf-screensaver--frames-reader-new
+           :file file :directory directory :remaining paths
+           :data (list :image-frames (vconcat paths)
+                       :image-types (make-vector (length paths) nil)
+                       :image-size (cons width height)
+                       :frame-rate frame-rate
+                       :source (or (plist-get manifest :source)
+                                   (replace-regexp-in-string
+                                    "\\.frames\\'" "" (file-name-base file)))
+                       :license (plist-get manifest :license)
+                       :assets (cons file paths))))))))
+
+(defun etaf-screensaver--frames-read-step (reader &optional limit deadline)
+  "Validate READER's next assets, stopping at LIMIT files or wall DEADLINE.
+Nil limits finish synchronously.  Each file is atomic; check the deadline
+before its stat/header read.  Reuse one temporary header buffer per chunk."
+  (let ((directory (etaf-screensaver--frames-reader-directory reader))
+        (types (plist-get (etaf-screensaver--frames-reader-data reader) :image-types))
+        (processed 0))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (while (and (etaf-screensaver--frames-reader-remaining reader)
+                  (or (null limit) (< processed limit))
+                  (or (null deadline) (< (float-time) deadline)))
+        (let* ((path (car (etaf-screensaver--frames-reader-remaining reader)))
+               (attributes (file-attributes path)))
+          ;; Basenames and the canonical root were checked once at begin.
+          ;; Only symlinks can leave the bundle; validate their target too.
+          (when (stringp (file-attribute-type attributes))
+            (let ((target (file-truename path)))
+              (unless (file-in-directory-p target directory)
+                (etaf-screensaver--fail "Frame file escapes its bundle: %s" path))
+              (setq attributes (file-attributes target))))
+          (unless (and attributes (null (file-attribute-type attributes))
+                       (eq (aref (file-attribute-modes attributes) 0) ?-))
+            (etaf-screensaver--fail "Frame file is missing or not regular: %s" path))
+          (let ((size (file-attribute-size attributes)))
+            (cl-incf (etaf-screensaver--frames-reader-bytes reader) size)
+            (unless (and (<= size (* 16 1024 1024))
+                         (<= (etaf-screensaver--frames-reader-bytes reader) (* 1024 1024 1024)))
+              (etaf-screensaver--fail "Frame bundle exceeds its byte limit: %s"
+                                     (etaf-screensaver--frames-reader-file reader))))
+          (erase-buffer)
+          ;; Recognize content independently of file suffix and host decoders.
+          ;; Binary signatures need only a short prefix; textual headers keep
+          ;; the same bounded fallback in synchronous and incremental reads.
+          (insert-file-contents-literally path nil 0 64)
+          (let ((type (or (image-type-from-buffer)
+                          (image-type-from-data (buffer-string)))))
+            (when (and (null type) (= (buffer-size) 64))
+              (goto-char (point-max))
+              (insert-file-contents-literally path nil 64 8192)
+              (setq type (or (image-type-from-buffer)
+                             (image-type-from-data (buffer-string)))))
+            (unless type
+              (etaf-screensaver--fail "Frame file is not a supported image: %s" path))
+            (aset types (etaf-screensaver--frames-reader-index reader) type))
+          (pop (etaf-screensaver--frames-reader-remaining reader))
+          (cl-incf (etaf-screensaver--frames-reader-index reader))
+          (cl-incf processed))))))
+
+(defun etaf-screensaver--frames-read-result (reader)
+  "Return READER's metadata only after every asset has been validated."
+  (when (etaf-screensaver--frames-reader-remaining reader)
+    (etaf-screensaver--fail "Frame validation is incomplete: %s"
+                           (etaf-screensaver--frames-reader-file reader)))
+  (etaf-screensaver--frames-reader-data reader))
+
+(defun etaf-screensaver--frames-read (file)
+  "Read FILE's manifest and synchronously validate every frame asset."
+  (let ((reader (etaf-screensaver--frames-read-begin file)))
+    (etaf-screensaver--frames-read-step reader)
+    (etaf-screensaver--frames-read-result reader)))
+
+(defun etaf-screensaver--frames-prepare-step (preparation)
+  "Advance PREPARATION by at most 64 assets and a two-millisecond budget.
+Manifest parsing is bounded by its own size/count limits.  A single file's
+IO cannot be preempted.  Keep failures for selection, not the current page."
+  (condition-case problem
+      (let* ((source (etaf-screensaver--frames-preparation-source preparation))
+             (file (nth 2 source))
+             (deadline (+ (float-time) 0.002)))
+        (unless (etaf-screensaver--frames-preparation-key preparation)
+          (let* ((key (etaf-screensaver--reel-read-cache-key (car source) file))
+                 (cached (assoc key etaf-screensaver--reel-read-cache)))
+            (setf (etaf-screensaver--frames-preparation-key preparation) key)
+            (if cached
+                (setf (etaf-screensaver--frames-preparation-data preparation) (nth 2 cached)
+                      (etaf-screensaver--frames-preparation-done preparation) t)
+              (setf (etaf-screensaver--frames-preparation-reader preparation)
+                    (etaf-screensaver--frames-read-begin file)))))
+        (unless (etaf-screensaver--frames-preparation-done preparation)
+          (let ((reader (etaf-screensaver--frames-preparation-reader preparation)))
+            (etaf-screensaver--frames-read-step reader 64 deadline)
+            (unless (etaf-screensaver--frames-reader-remaining reader)
+              (setf (etaf-screensaver--frames-preparation-data preparation)
+                    (etaf-screensaver--frames-read-result reader)
+                    (etaf-screensaver--frames-preparation-reader preparation) nil
+                    (etaf-screensaver--frames-preparation-done preparation) t)))))
+    (error
+     ;; This is a deferred error, not a fallback or a successful cache entry.
+     ;; Selection below re-signals it unless the manifest has since changed.
+     (setf (etaf-screensaver--frames-preparation-problem preparation) problem
+           (etaf-screensaver--frames-preparation-reader preparation) nil
+           (etaf-screensaver--frames-preparation-done preparation) t))))
+
+(defun etaf-screensaver--frames-prepare-finish (preparation)
+  "Finish PREPARATION at page selection, rechecking its manifest identity.
+Only a complete successful read can enter the shared playback cache."
+  (let* ((source (etaf-screensaver--frames-preparation-source preparation))
+         (file (nth 2 source))
+         (key (etaf-screensaver--reel-read-cache-key (car source) file)))
+    (if (not (equal key (etaf-screensaver--frames-preparation-key preparation)))
+        ;; A changed file (or a not-yet-started job) uses the ordinary reader.
+        (etaf-screensaver--reel-read (car source) (nth 1 source) file)
+      (when-let* ((problem (etaf-screensaver--frames-preparation-problem preparation)))
+        (signal (car problem) (cdr problem)))
+      (let ((reader (etaf-screensaver--frames-preparation-reader preparation)))
+        (when reader
+          (etaf-screensaver--frames-read-step reader)
+          (setf (etaf-screensaver--frames-preparation-data preparation)
+                (etaf-screensaver--frames-read-result reader)))
+        (etaf-screensaver--reel-cache-put
+         key (etaf-screensaver--frames-preparation-data preparation))))))
 
 (etaf-screensaver-define-reel-provider 'frames
   :title "Baked image frames"

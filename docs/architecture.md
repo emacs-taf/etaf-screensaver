@@ -73,7 +73,10 @@ validated file names, not encoded or decoded images, so a gallery round can
 reuse its metadata without retaining its frames. Changed manifest size or
 modification time triggers a fresh provider read. Registration
 validates metadata and the referenced file but not frames, so an unused reel
-costs only its spec; the first playback verifies frame shape. Importing
+costs only its spec. A private source descriptor travels with the registered
+scene in the compiled program; read-ahead never resolves a newer registration
+by id or inspects a creation closure. Custom providers keep their synchronous
+read contract. Importing
 copies a recording beside a `.esr` spec and reports compatibility,
 dimensions, color depths and license per file instead of claiming universal
 support. The loader scans `.esr` specs beside `.esc` scenes and skips a
@@ -106,7 +109,9 @@ an additional containment check. Header detection reuses one bounded buffer
 rather than invoking editor buffer-lifecycle hooks for every asset. It reads
 64 bytes first and extends unrecognized prefixes to at most 8192 bytes, so
 binary signatures avoid unnecessary reads while long textual headers remain
-supported. File suffixes never substitute for content recognition. Format
+supported. A shared begin/step/result reader performs this entire validation
+for both synchronous import/playback and incremental next-page preparation;
+there is no reduced validation path. File suffixes never substitute for content recognition. Format
 recognition does not depend on the host build's image decoders. Validated
 formats travel with the file names so playback need not reread each header;
 other providers can omit formats and let the reel detect them lazily. A
@@ -164,6 +169,19 @@ Scheduling uses an absolute frame grid anchored to the current page's clock,
 with the natural page deadline as its final slot. Rendering time and timer
 jitter do not accumulate into a shifting cadence. Missed grid slots are
 skipped rather than replayed as a burst of old ticks.
+During the last six seconds of a page, the same callback may prepare metadata
+for the next already-queued page. It processes at most one reader and 64
+assets per callback, checking a two-millisecond wall budget before each
+atomic stat/header read; manifest parsing has its own 1 MiB/7200-entry bound.
+OS file operations cannot be preempted. Each chunk owns one temporary header
+buffer, with no buffer, timer, process or decoded image retained between
+chunks. It neither expands a new shuffle round nor advances the playlist or
+RNG. At selection, the manifest cache key is checked again; changed manifests
+use a fresh read and incomplete reads finish synchronously. Only complete
+successful results enter the existing shared cache. A failed preparation is
+retained solely by its presentation and re-signaled on selection, so a broken
+next page cannot stop the current page early. Stop drops all preparations,
+including failures and partial reads, without adding them to resume state.
 A mosaic page lasts for its longest work; recorded children follow their own
 timing and loop independently. It schedules a successor only
 if it still owns the active presentation. Scene boundaries and resize update

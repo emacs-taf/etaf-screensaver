@@ -24,9 +24,10 @@
 ;; owns one animation timer, a transient input map and an ephemeral buffer;
 ;; stopping releases all of these.  No child process is started.  This is not
 ;; a security lock.  Callbacks supplied by scene authors must be pure: they
-;; may not create processes/timers or alter editor state.  A registered reel
-;; reads its recording once when its scene starts; no other scene callback
-;; performs I/O.
+;; may not create processes/timers or alter editor state.  Reels read their
+;; recording at scene creation; the built-in image reader can also prepare
+;; the next queued page incrementally in normal animation callbacks.  No
+;; other scene callback performs I/O.
 ;;
 ;; Only the following declarations are public.  Unlisted symbols are private.
 ;; See docs/manual.md for playback composition, configuration and scene specs.
@@ -138,9 +139,14 @@
 ;; :provider and :recording plus optional :title, :summary, :tags, :width,
 ;; :height, :frame-rate, :frame-count, :source, :license and :background.
 ;; A relative :recording resolves against the reel file's directory.  The
-;; scene reads the recording when it is created, so an unused reel holds only
-;; metadata; playback follows the recording's own per-frame timing and
-;; centers its fixed canvas, cropping when the window is smaller.  When the
+;; registration retains metadata only.  Playback reads at scene creation,
+;; with recent unchanged results cached.  The built-in image provider may
+;; validate the next queued page during the current page's normal callbacks;
+;; unfinished validation completes at selection.  A next-page failure is
+;; reported only when that page is selected, not while the current page plays.
+;; Custom providers keep their synchronous :read contract.  Playback follows
+;; the recording's own timing and centers its fixed canvas, cropping when
+;; the window is smaller.  When the
 ;; spec carries :frame-count and :frame-rate the reel registers that full
 ;; length as its natural :duration, so a program plays the work once instead
 ;; of cutting it mid-loop.  Invalid
