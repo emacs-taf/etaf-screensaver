@@ -40,14 +40,17 @@ text are not merged. A fixed space occupies one glyph, so pixel-based clipping
 can cut it without counting its width once per placeholder. This projection
 never changes the logical rows used for composition or reveals. Rows and
 their fragments stay separate through composition and reveal; projection
-concatenates compact glyph runs once, without first copying the full grid and its text
-properties into another string. Publication compares that immutable projected
-string, so a scene can reuse and mutate its own row without aliasing the last
-published snapshot. A page boundary copies outgoing rows before the old scene
-state is released or a new scene is created. The renderer handles one unit
-per blank run rather than per empty cell. Publication depends
-on the Runtime mount, not the Host's painted bounds: a shrink can temporarily
-clip all old glyphs, and the newly fitted frame must still replace them.
+concatenates each row's compact glyph runs once, without copying the full
+grid and its text properties into another string. Each row has a stable
+retained Text Host in a one-line box. Publication compares immutable row
+strings and replaces only changed rows in one batched Host update, so static
+margins and borders need no repeated paragraph layout. A scene can reuse and
+mutate its own row without aliasing the last published snapshot. Resize
+commits any added row Hosts before addressing them. A page boundary copies
+outgoing rows before the old scene state is released or a new scene is
+created. The renderer handles one unit per blank run rather than per empty
+cell. Publication depends on the Runtime mount, not painted bounds: a shrink
+can clip all old glyphs, and the newly fitted rows must still replace them.
 
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte

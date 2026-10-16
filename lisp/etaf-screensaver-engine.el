@@ -6,7 +6,8 @@
 ;;; Commentary:
 ;; One owner supplies time and viewport changes.  Mosaic children have their
 ;; own scene states and random streams, but no Runtime, timer or input owner.
-;; Only the composed parent frame crosses ETAF's retained Host boundary.
+;; Only changed rows of the composed parent cross ETAF's retained Host
+;; boundary, together in one publication.
 
 ;;; Code:
 (require 'cl-lib)
@@ -21,7 +22,7 @@
 
 (cl-defstruct (etaf-screensaver--session (:constructor etaf-screensaver--session-new))
   scene state item seed random-state columns rows window-columns window-rows
-  size revision params ticks elapsed dt frame published-frame images canvas-ref runtime buffer
+  size revision params ticks elapsed dt frame publication published-frame images runtime buffer
   children layout metrics composition-context template previous-rows transition-duration)
 
 (defun etaf-screensaver--frame-display (rows)
@@ -180,7 +181,13 @@ Scene rows may be borrowed; publication owns any added background properties."
                  (revealed (round (* rows progress progress (- 3 (* 2 progress))))))
             (setf (etaf-screensaver--session-frame session)
                   (append (cl-subseq (etaf-screensaver--session-frame session) 0 revealed)
-                          (nthcdr revealed (etaf-screensaver--session-previous-rows session))))))))))
+                          (nthcdr revealed (etaf-screensaver--session-previous-rows session))))))))
+    (let ((previous (etaf-screensaver--session-publication session)))
+      (setf (etaf-screensaver--session-publication session)
+            (mapcar (lambda (row)
+                      (cons (or (car (pop previous)) (make-symbol "screensaver-row"))
+                            (etaf-screensaver--frame-display (list row))))
+                    (etaf-screensaver--session-frame session))))))
 
 (defun etaf-screensaver--session-select (session item seed &optional transition)
   "Initialize SESSION for ITEM at SEED, with optional TRANSITION seconds."
@@ -243,26 +250,30 @@ Scene rows may be borrowed; publication owns any added background properties."
   "Create ITEM at SEED and window size COLUMNS by ROWS for BUFFER."
   (let ((session (etaf-screensaver--session-new
                   :window-columns columns :window-rows rows :buffer buffer
-                  :size (etaf-ref (cons columns rows)) :revision (etaf-ref 0)
-                  :canvas-ref (make-symbol "screensaver-canvas"))))
+                  :size (etaf-ref (cons columns rows)) :revision (etaf-ref 0))))
     (etaf-screensaver--session-select session item seed)
     session))
 
 (defun etaf-screensaver--session-publish (session)
-  "Publish SESSION's changed text, colors and images through the retained Host."
+  "Publish SESSION's changed rows together through retained Text Hosts."
   (let ((runtime (etaf-screensaver--session-runtime session))
-        (ref (etaf-screensaver--session-canvas-ref session))
-        ;; Compare an immutable publication snapshot, not borrowed row strings
-        ;; that a scene may reuse and mutate on its next step.
-        (frame (etaf-screensaver--frame-display (etaf-screensaver--session-frame session))))
-    ;; The canvas Host exists for the whole mount, even when old oversized
-    ;; glyphs own no painted cells after a shrink.  Visibility is not a
-    ;; precondition for publishing the newly fitted frame that restores them.
-    (when (and runtime (etaf-runtime-mounted-p runtime)
-               (not (equal-including-properties frame (etaf-screensaver--session-published-frame session))))
-      (etaf-runtime-update-host-content runtime ref frame)
-      (etaf-screensaver--session-flush-images session (etaf-screensaver--frame-images frame))
-      (setf (etaf-screensaver--session-published-frame session) frame))))
+        (publication (etaf-screensaver--session-publication session))
+        (previous (etaf-screensaver--session-published-frame session))
+        updates images)
+    (when (and runtime (etaf-runtime-mounted-p runtime))
+      (dolist (row publication)
+        ;; Compare immutable text, never a scene's mutable source strings.
+        (let ((old (pop previous)))
+          (unless (and (eq (car row) (car old))
+                       (equal-including-properties (cdr row) (cdr old)))
+            (push row updates))))
+      (when updates
+        (etaf-runtime-update-host-contents runtime (nreverse updates))
+        (dolist (row publication)
+          (dolist (image (etaf-screensaver--frame-images (cdr row)))
+            (cl-pushnew image images :test #'equal)))
+        (etaf-screensaver--session-flush-images session images)
+        (setf (etaf-screensaver--session-published-frame session) publication)))))
 
 (defun etaf-screensaver--session-step (session dt)
   "Advance SESSION and every independent child by DT, without publishing."
@@ -315,9 +326,12 @@ Scene rows may be borrowed; publication owns any added background properties."
                              (etaf-screensaver--session-context session)))
             (etaf-screensaver--session-select session (etaf-screensaver--session-item session)
                                               (etaf-screensaver--session-seed session))))))
-      (setf (etaf-value (etaf-screensaver--session-size session)) (cons columns rows))
       (when (etaf-screensaver--session-buffer session)
-        (etaf-screensaver--session-render session)
+        (etaf-screensaver--session-render session))
+      (setf (etaf-value (etaf-screensaver--session-size session)) (cons columns rows))
+      (when-let* ((runtime (etaf-screensaver--session-runtime session)))
+        ;; Resize can add row Hosts; commit their View before addressing them.
+        (etaf-runtime-flush runtime)
         (etaf-screensaver--session-publish session)))))
 
 (defun etaf-screensaver--session-background (session)

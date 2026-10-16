@@ -377,7 +377,7 @@
               (when (= (plist-get context :tick) 1) (aset state 0 ?B))
               (when (>= (plist-get context :tick) 4)
                 (put-text-property 0 (length state) 'face '(:foreground "#00FF00") state)))
-      :render (lambda (state _context) (list state)))
+      :render (lambda (state _context) (list "STATIC TOP" state "" "STATIC BOTTOM")))
     (dolist (style '(full card band mosaic))
       (let ((buffer (etaf-screensaver-start (list :scene 'presentation-mutable
                                                  :presentation style))))
@@ -393,6 +393,9 @@
                  (cl-some (lambda (spec)
                             (and (listp spec) (equal (plist-get spec :foreground) "#00FF00")))
                           (if (keywordp (car-safe face)) (list face) face)))))))
+        (let ((text (etaf-screensaver-presentation-tests--text buffer)))
+          (should (string-match-p
+                   "STATIC TOP[^\n]*\n[^\n]*BAAA[^\n]*\n[^\n]*\n[^\n]*STATIC BOTTOM" text)))
         (etaf-screensaver-stop)))))
 
 (provide 'etaf-screensaver-presentation-tests)

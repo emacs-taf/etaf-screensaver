@@ -24,10 +24,10 @@
        :background-color
        (progn (etaf-value revision)
               (etaf-screensaver--session-background session))
-    (text :ref (etaf-screensaver--session-canvas-ref session)
-          :id 'screensaver-canvas
-          (expr (etaf-screensaver--frame-display
-                 (etaf-screensaver--session-frame session))))))
+    (box :for (row (progn (etaf-value size) (etaf-value revision)
+                          (etaf-screensaver--session-publication session)))
+         :key (car row) :height '(lh 1)
+      (text :ref (car row) (expr (cdr row))))))
 
 (provide 'etaf-screensaver-views)
 ;;; etaf-screensaver-views.el ends here
