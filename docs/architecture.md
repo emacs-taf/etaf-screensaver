@@ -73,9 +73,12 @@ broken spec without disturbing the others.
 Text recordings render as canvas rows; image recordings take a second path.
 The `frames` provider returns image file names and a pixel size; the reel
 layer scales each frame to fit the canvas, centers it on whole character rows and crops it per row with a `display`
-slice, the same retained Host boundary ETAF video uses. A display run reserves
-its full cell footprint, with a fractional-width spacer for pixel rounding;
-neighboring tile borders therefore stay aligned without stretching the image. The engine flushes the previous frame from Emacs's image cache
+slice, the same retained Host boundary ETAF video uses. Composition reserves
+each image run's full cell footprint for character-grid clipping. Publication
+projects that replacing run as one glyph with the same image slice; its known
+pixel width avoids measuring a long replaced string on every frame. A fixed
+pixel-width spacer supplies rounding slack, so neighboring tile borders stay
+aligned without stretching the image or remeasuring a font-relative spacer. The engine flushes the previous frame from Emacs's image cache
 after the next one is committed and flushes remaining images on teardown.
 Steady playback retains only the current page's decoded frames; a reveal may
 also retain one outgoing page until its last visible slice is replaced.

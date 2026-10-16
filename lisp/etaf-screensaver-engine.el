@@ -24,6 +24,26 @@
   size revision params ticks elapsed dt frame published-frame images canvas-ref runtime buffer
   children layout metrics composition-context template previous-rows transition-duration)
 
+(defun etaf-screensaver--frame-display (frame)
+  "Project logical image footprints in FRAME as single replacing glyphs.
+Composition and clipping still use complete character-cell footprints.  At
+publication, an image slice replaces its entire run, so one character carries
+the same pixels without asking the renderer to measure a long replaced run."
+  (let ((position 0) (start 0) (length (length frame)) pieces)
+    (while (< position length)
+      (let* ((end (next-single-property-change position 'display frame length))
+             (display (get-text-property position 'display frame)))
+        (when (and (> (- end position) 1)
+                   (eq (car-safe (car-safe display)) 'slice)
+                   (eq (car-safe (cadr display)) 'image))
+          (push (substring frame start position) pieces)
+          (push (substring frame position (1+ position)) pieces)
+          (setq start end))
+        (setq position end)))
+    (if pieces
+        (apply #'concat (nreverse (cons (substring frame start) pieces)))
+      frame)))
+
 (defun etaf-screensaver--frame-images (frame)
   "Return the distinct image objects FRAME displays."
   (let ((position 0) (length (length frame)) images)
@@ -210,7 +230,8 @@ only framed works need an explicit background on each row."
     (when (and runtime (etaf-runtime-mounted-p runtime)
                (etaf-host-ref-bounds runtime ref)
                (not (equal-including-properties frame (etaf-screensaver--session-published-frame session))))
-      (etaf-runtime-update-host-content runtime ref frame)
+      (etaf-runtime-update-host-content
+       runtime ref (etaf-screensaver--frame-display frame))
       (etaf-screensaver--session-flush-images session (etaf-screensaver--frame-images frame))
       (setf (etaf-screensaver--session-published-frame session) frame))))
 

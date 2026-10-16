@@ -26,7 +26,8 @@
               (etaf-screensaver--session-background session))
     (text :ref (etaf-screensaver--session-canvas-ref session)
           :id 'screensaver-canvas
-          (expr (etaf-screensaver--session-frame session)))))
+          (expr (etaf-screensaver--frame-display
+                 (etaf-screensaver--session-frame session))))))
 
 (provide 'etaf-screensaver-views)
 ;;; etaf-screensaver-views.el ends here

@@ -59,6 +59,9 @@
 
 ### Fixed
 
+- Gallery playback avoids repeated image-width measurement while preserving
+  frame size, letterboxing, clipping and aligned mosaic borders.
+
 - Image-bundle imports recognize file headers even in a headless Emacs build.
   Image composition remains testable without decoding pixels; graphical
   playback still checks decoder support. Validated formats are reused during

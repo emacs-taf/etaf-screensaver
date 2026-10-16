@@ -420,7 +420,7 @@
         (delete-directory directory t)))))
 
 (defun etaf-screensaver-reel-tests--image-runs (buffer)
-  "Return BUFFER's visible image runs as (ROW COLUMN SPAN SLICE FILE)."
+  "Return BUFFER's image runs as (ROW PIXEL-X PIXEL-WIDTH SLICE FILE)."
   (with-current-buffer buffer
     (save-excursion
       (goto-char (point-min))
@@ -432,8 +432,10 @@
                      (display (get-text-property position 'display))
                      (image (car-safe (cdr-safe display))))
                 (when (eq (car-safe image) 'image)
-                  (push (list row (- position (line-beginning-position))
-                              (- next position) (car display) (image-property image :file))
+                  (push (list row (etaf-string-pixel-width
+                                   (buffer-substring (line-beginning-position) position))
+                              (etaf-string-pixel-width (buffer-substring position next))
+                              (car display) (image-property image :file))
                         runs))
                 (setq position next))))
           (cl-incf row)
@@ -493,9 +495,20 @@
                   (should (cl-every (lambda (run) (string-match-p "incoming" (nth 4 run))) runs))
                   (etaf-screensaver-reel-tests--wait
                    (lambda () (not (equal runs (etaf-screensaver-reel-tests--image-runs buffer))))))
-                (let ((columns (plist-get (etaf-screensaver-status) :columns)))
-                  (dolist (row (split-string (string-remove-suffix "\n" (etaf-screensaver-reel-tests--text buffer)) "\n"))
-                    (should (= (string-width row) columns))))
+                (let* ((columns (plist-get (etaf-screensaver-status) :columns))
+                       (runtime (etaf-runtime-for-buffer buffer))
+                       (metrics (etaf-display-metrics runtime))
+                       (expected (* columns (plist-get metrics :char-width))))
+                  ;; Display runs replace text: their physical footprint, not
+                  ;; the number of placeholder characters, must fill the row.
+                  (with-current-buffer buffer
+                    (save-excursion
+                      (goto-char (point-min))
+                      (while (< (point) (point-max))
+                        (let* ((row (buffer-substring (point) (line-end-position)))
+                               (width (etaf-string-pixel-width row)))
+                          (should (= width expected)))
+                        (forward-line 1)))))
                 (etaf-screensaver-stop)
                 (let* ((direct (etaf-screensaver-start (list :presentation style :scenes incoming)))
                        (direct-geometry (mapcar (lambda (run) (cl-subseq run 0 4))

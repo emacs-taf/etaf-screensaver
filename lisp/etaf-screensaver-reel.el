@@ -370,7 +370,7 @@ moving the layout around it."
                          ;; stretching it: the last cell supplies only the
                          ;; fractional-column slack left by the image width.
                          (if spacer
-                             (propertize " " 'display (list 'space :width (/ (float slack) char-width)))
+                             (propertize " " 'display (list 'space :width (list slack)))
                            "")))))))
 
 (defun etaf-screensaver--reel-text-rows (state context)
