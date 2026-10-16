@@ -195,19 +195,43 @@ Plans are shared read-only until the page, geometry or minute changes."
         (aset canvas row (nreverse parts))))
     canvas))
 
+(cl-defstruct (etaf-screensaver--frame-fragment
+               (:constructor etaf-screensaver--frame-fragment-new))
+  "A borrowed logical work row and its presentation-only background."
+  text background)
+
+(defun etaf-screensaver--frame-fragment-copy (part &optional background)
+  "Copy PART's logical text and faces, adding fallback BACKGROUND.
+Used when a row must be clipped or frozen for a reveal, not on ordinary frames."
+  (let* ((fragment (etaf-screensaver--frame-fragment-p part))
+         (text (copy-sequence (if fragment
+                                  (etaf-screensaver--frame-fragment-text part) part)))
+         (paper (and fragment (etaf-screensaver--frame-fragment-background part))))
+    (when paper (add-face-text-property 0 (length text) (list :background paper) t text))
+    (when background
+      (add-face-text-property 0 (length text) (list :background background) t text))
+    text))
+
 (defun etaf-screensaver--presentation-compose (frames context template)
-  "Place independent FRAMES in read-only TEMPLATE's pre-split row plans."
+  "Place FRAMES in read-only TEMPLATE as rows of logical fragments.
+Keep static strings and work rows separate until glyph projection.  Only a
+viewport narrower than the layout requires joining and clipping logical text."
   (let ((works (vconcat (mapcar #'vconcat frames)))
+        (backgrounds (vconcat (plist-get context :backgrounds)))
         (columns (plist-get context :columns))
         (width (plist-get (plist-get context :layout) :width)))
     (cl-loop for index below (plist-get context :rows)
-             for row = (mapconcat
+             for row = (mapcar
                         (lambda (part)
                           (if (stringp part) part
-                            (aref (aref works (car part)) (cdr part))))
-                        (aref template index) "")
+                            (etaf-screensaver--frame-fragment-new
+                             :text (aref (aref works (car part)) (cdr part))
+                             :background (aref backgrounds (car part)))))
+                        (aref template index))
              collect (if (= columns width) row
-                       (etaf-screensaver--presentation-crop row columns)))))
+                       (list (etaf-screensaver--presentation-crop
+                              (mapconcat #'etaf-screensaver--frame-fragment-copy row "")
+                              columns))))))
 
 (provide 'etaf-screensaver-presentation)
 ;;; etaf-screensaver-presentation.el ends here

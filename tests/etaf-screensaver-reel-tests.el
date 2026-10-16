@@ -504,22 +504,27 @@
      (list :id 'reel-test-resize :provider 'frames
            :recording (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")
            :title "Resizing images" :frame-rate 20))
-    (let ((buffer (etaf-screensaver-start '(:scene reel-test-resize :duration 30))))
-      (dolist (margins '((10 10) (3 3) (0 0)))
-        (apply #'set-window-margins nil margins)
-        (let ((columns (1- (window-body-width))))
-          (etaf-screensaver-reel-tests--wait
-           (lambda ()
-             (and (= (plist-get (etaf-screensaver-status) :columns) columns)
-                  (etaf-screensaver-reel-tests--image-runs buffer))))
-          (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
-                 (expected (* columns (plist-get metrics :char-width)))
-                 (runs (etaf-screensaver-reel-tests--image-runs buffer)))
-            (should runs)
-            (with-current-buffer buffer
-              (dolist (row (split-string (buffer-substring (point-min) (point-max)) "\n" t))
-                (let ((width (etaf-string-pixel-width row)))
-                  (should (= width expected)))))))))))
+    (dolist (style '(full card band mosaic))
+      (let ((buffer (etaf-screensaver-start
+                     (list :scene 'reel-test-resize :duration 30 :presentation style))))
+        ;; The first shrink is below the framed layouts' minimum grid: their
+        ;; work and static fragments must still clip to the drawable width.
+        (dolist (margins '((10 10) (3 3) (0 0)))
+          (apply #'set-window-margins nil margins)
+          (let ((columns (1- (window-body-width))))
+            (etaf-screensaver-reel-tests--wait
+             (lambda ()
+               (and (= (plist-get (etaf-screensaver-status) :columns) columns)
+                    (etaf-screensaver-reel-tests--image-runs buffer))))
+            (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+                   (expected (* columns (plist-get metrics :char-width)))
+                   (runs (etaf-screensaver-reel-tests--image-runs buffer)))
+              (should runs)
+              (with-current-buffer buffer
+                (dolist (row (split-string (buffer-substring (point-min) (point-max)) "\n" t))
+                  (let ((width (etaf-string-pixel-width row)))
+                    (should (= width expected))))))))
+        (etaf-screensaver-stop)))))
 
 (ert-deftest etaf-screensaver-reel-tests-image-reveal-keeps-margins ()
   "Image reveals preserve blank margins and moving slices in every layout."

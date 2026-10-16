@@ -25,20 +25,22 @@ publication compares text properties as well as characters. Full-canvas works
 inherit the Host background directly. Framed works use a read-only mat, border
 and caption template, rebuilt only for a new page, viewport or clock minute;
 its rows are split into static fragments and work-row slots. Each animation
-row concatenates these once, without recropping an already placed neighbor's
-text or image runs. Exact-width rows can be reused, but adding page-specific
-faces first copies the source so a recording's
-cached strings do not acquire another presentation's colors. Short rows only
-append blank cells; fitting a row that already fits does not slice or rebuild
-its text and image runs. At final publication, consecutive ordinary spaces
+fills those slots with borrowed logical rows and background metadata, without
+joining a full-width row or copying a source merely to add its presentation's
+face. Background-only framing is applied to the owned compact string after
+glyph projection; it cannot change font metrics or recolor a recording's
+cached strings. Only a viewport narrower than the layout joins logical
+fragments for the shared clipping operation. Short rows append blank cells;
+fitting a row that already fits does not slice or rebuild its text and image
+runs. At final publication, consecutive ordinary spaces
 with identical text properties share a single fixed-pixel space glyph. The
 width comes from a space measured with that run's face, not the default font;
 property boundaries, newlines, existing display objects and composed/invisible
 text are not merged. A fixed space occupies one glyph, so pixel-based clipping
 can cut it without counting its width once per placeholder. This projection
-never changes the logical rows used for composition or reveals. Rows stay
-separate through composition and reveal; projection concatenates their compact
-glyph runs once, without first copying the full character grid and its text
+never changes the logical rows used for composition or reveals. Rows and
+their fragments stay separate through composition and reveal; projection
+concatenates compact glyph runs once, without first copying the full grid and its text
 properties into another string. Publication compares that immutable projected
 string, so a scene can reuse and mutate its own row without aliasing the last
 published snapshot. A page boundary copies outgoing rows before the old scene

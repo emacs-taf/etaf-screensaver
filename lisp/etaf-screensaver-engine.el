@@ -25,48 +25,61 @@
   children layout metrics composition-context template previous-rows transition-duration)
 
 (defun etaf-screensaver--frame-display (rows)
-  "Project logical ROWS into one immutable, compact publication string.
-Composition and clipping retain complete character-cell footprints.  Image
-slices and identically styled blank runs become single replacing glyphs
-before concatenation, avoiding a second full-grid string and property copy.
-The logical rows and scene source strings are never mutated."
+  "Project logical fragment ROWS into one compact publication string.
+Image slices and identically styled blanks become single replacing glyphs.
+Presentation backgrounds are added only to the owned publication string;
+borrowed work rows and static mat/border fragments remain unchanged."
   (save-match-data
-    (let (pieces)
-      (dolist (frame rows)
-        (when pieces (push "\n" pieces))
-        (let ((position 0) (start 0) (length (length frame)))
-          (while (< position length)
-            (let* ((display (get-text-property position 'display frame))
-                   (end (if display
-                            (next-single-property-change position 'display frame length)
-                          (next-property-change position frame length))))
-              (when (> (- end position) 1)
-                (cond
-                 ((and (eq (car-safe (car-safe display)) 'slice)
-                       (eq (car-safe (cadr display)) 'image))
-                  (push (substring frame start position) pieces)
-                  (push (substring frame position (1+ position)) pieces)
-                  (setq start end))
-                 ((not (or display
-                           (get-text-property position 'composition frame)
-                           (get-text-property position 'invisible frame)))
-                  (let ((part (substring frame position end)) (offset 0) space-width)
-                    (while (string-match "  +" part offset)
-                      (let* ((from (match-beginning 0))
-                             (to (match-end 0))
-                             (blank (substring part from (1+ from))))
-                        ;; Measure the run's own face, not the default font.
-                        (unless space-width
-                          (setq space-width (etaf-string-pixel-width blank)))
-                        (put-text-property
-                         0 (length blank) 'display
-                         (list 'space :width (list (* (- to from) space-width))) blank)
-                        (push (substring frame start (+ position from)) pieces)
-                        (push blank pieces)
-                        (setq start (+ position to) offset to)))))))
-              (setq position end)))
-          (push (if (= start 0) frame (substring frame start)) pieces)))
-      (apply #'concat (nreverse pieces)))))
+    (let ((output-length 0) pieces paints)
+      (cl-labels ((emit (text)
+                    (push text pieces)
+                    (cl-incf output-length (length text))))
+        (dolist (row rows)
+          (when pieces (emit "\n"))
+          (dolist (part row)
+            (let* ((fragment (etaf-screensaver--frame-fragment-p part))
+                   (frame (if fragment (etaf-screensaver--frame-fragment-text part) part))
+                   (background (and fragment (etaf-screensaver--frame-fragment-background part)))
+                   (output-start output-length)
+                   (position 0) (start 0) (length (length frame)))
+              (while (< position length)
+                (let* ((display (get-text-property position 'display frame))
+                       (end (if display
+                                (next-single-property-change position 'display frame length)
+                              (next-property-change position frame length))))
+                  (when (> (- end position) 1)
+                    (cond
+                     ((and (eq (car-safe (car-safe display)) 'slice)
+                           (eq (car-safe (cadr display)) 'image))
+                      (emit (substring frame start position))
+                      (emit (substring frame position (1+ position)))
+                      (setq start end))
+                     ((not (or display
+                               (get-text-property position 'composition frame)
+                               (get-text-property position 'invisible frame)))
+                      (let ((text (substring frame position end)) (offset 0) space-width)
+                        (while (string-match "  +" text offset)
+                          (let* ((from (match-beginning 0))
+                                 (to (match-end 0))
+                                 (blank (substring text from (1+ from))))
+                            ;; Background-only framing cannot change metrics.
+                            ;; Measure the source run's own face, not the default.
+                            (unless space-width
+                              (setq space-width (etaf-string-pixel-width blank)))
+                            (put-text-property
+                             0 (length blank) 'display
+                             (list 'space :width (list (* (- to from) space-width))) blank)
+                            (emit (substring frame start (+ position from)))
+                            (emit blank)
+                            (setq start (+ position to) offset to)))))))
+                  (setq position end)))
+              (emit (if (= start 0) frame (substring frame start)))
+              (when background (push (list output-start output-length background) paints)))))
+        (let ((text (apply #'concat (nreverse pieces))))
+          (dolist (paint paints)
+            (add-face-text-property (nth 0 paint) (nth 1 paint)
+                                    (list :background (nth 2 paint)) t text))
+          text)))))
 
 (defun etaf-screensaver--frame-images (frame)
   "Return the distinct image objects FRAME displays."
@@ -107,31 +120,23 @@ The logical rows and scene source strings are never mutated."
                     (if limit (cl-random limit random-state)
                       (/ (float (cl-random 1000000 random-state)) 1000000.0))))))
 
-(defun etaf-screensaver--session-scene-rows (session &optional paint-background)
-  "Render SESSION's rectangular rows, optionally adding PAINT-BACKGROUND.
-A full-canvas work already inherits its background from the retained Host;
-only framed works need an explicit background on each row."
+(defun etaf-screensaver--session-scene-rows (session)
+  "Render SESSION's rectangular logical rows without presentation faces.
+Scene rows may be borrowed; publication owns any added background properties."
   (let* ((frame (funcall (etaf-screensaver--scene-render (etaf-screensaver--session-scene session))
                          (etaf-screensaver--session-state session)
                          (etaf-screensaver--session-context session)))
          (lines (cond ((stringp frame) (split-string frame "\n"))
                       ((proper-list-p frame) frame)
                       (t (etaf-screensaver--fail "Scene must render a string or row list"))))
-         (columns (etaf-screensaver--session-columns session))
-         (background (plist-get (etaf-screensaver--session-item session) :background)))
+         (columns (etaf-screensaver--session-columns session)))
     (cl-loop repeat (etaf-screensaver--session-rows session)
              for line = (or (pop lines) "")
              collect
              (progn
                (unless (stringp line) (etaf-screensaver--fail "Scene rows must be strings"))
-               (let ((row (etaf-screensaver--presentation-crop
-                           (string-replace "\r" "" (string-replace "\t" " " line)) columns)))
-                 (when paint-background
-                   ;; An exact-width crop may return the recording's cached row.
-                   ;; Do not add page-specific faces to that shared source.
-                   (setq row (copy-sequence row))
-                   (add-face-text-property 0 (length row) (list :background background) t row))
-                 row)))))
+               (etaf-screensaver--presentation-crop
+                (string-replace "\r" "" (string-replace "\t" " " line)) columns)))))
 
 (defun etaf-screensaver--session-render (session)
   "Project SESSION's independent works into its window rectangle."
@@ -146,7 +151,7 @@ only framed works need an explicit background on each row."
       (setf (etaf-screensaver--session-metrics child) (etaf-screensaver--session-metrics session)))
     (setf (etaf-screensaver--session-frame session)
           (if (eq style 'full)
-              (etaf-screensaver--session-scene-rows session)
+              (mapcar #'list (etaf-screensaver--session-scene-rows session))
             (let* ((context (or (etaf-screensaver--session-composition-context session)
                                 (setf (etaf-screensaver--session-composition-context session)
                                       (list :layout (etaf-screensaver--session-layout session)
@@ -162,7 +167,7 @@ only framed works need an explicit background on each row."
                       (etaf-screensaver--session-template session)
                       (etaf-screensaver--presentation-template style context)))
               (etaf-screensaver--presentation-compose
-               (mapcar (lambda (work) (etaf-screensaver--session-scene-rows work t)) works)
+               (mapcar #'etaf-screensaver--session-scene-rows works)
                context (etaf-screensaver--session-template session)))))
     (when (etaf-screensaver--session-previous-rows session)
       (let ((progress (/ (etaf-screensaver--session-elapsed session)
@@ -191,12 +196,11 @@ only framed works need an explicit background on each row."
                      ;; outgoing full canvas may have inherited its background;
                      ;; freeze it without changing any scene-owned strings.
                      (mapcar
-                      (lambda (source)
-                        (let ((row (copy-sequence source)))
-                          (add-face-text-property
-                           0 (length row)
-                           (list :background (etaf-screensaver--session-background session)) t row)
-                          row))
+                      (lambda (row)
+                        (mapcar (lambda (part)
+                                  (etaf-screensaver--frame-fragment-copy
+                                   part (etaf-screensaver--session-background session)))
+                                row))
                       (etaf-screensaver--session-frame session))))
          (tiles (plist-get item :tiles))
          (layout (etaf-screensaver--presentation-layout
