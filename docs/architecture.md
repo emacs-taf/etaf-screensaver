@@ -202,6 +202,10 @@ Performance scenarios measure autonomous frame cadence including timer wait,
 not a private engine step or the removed workspace controls. Full-size gallery
 workloads include manifest fingerprints in their environment and reject missing
 or reduced fixtures. GUI boundary workloads preserve natural dwell times;
-short repeated boundaries belong only to headless batch tests. The dedicated
+short repeated boundaries belong only to headless batch tests. Boundary
+preparation interpolates time between public elapsed-time snapshots: a jittered
+last frame need not land inside a single-frame sampling window. Preparation
+never preloads the incoming page, and losing the current page before timing is
+an explicit sampling failure. The dedicated
 transition GUI scenario captures one normal day-to-night change, including
 both image sources in the public buffer, and exits after wake.

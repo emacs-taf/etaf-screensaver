@@ -122,13 +122,31 @@ a tiny fixture.  Generate the gallery outside Git with bake-gallery.mjs."
                      ;; The timed operation still includes the boundary's work,
                      ;; its publication and redisplay; none is preloaded here.
                      (when (or boundary (and playback (not primed)))
-                       (let ((deadline (+ (float-time) dwell 5))
-                             (target (- dwell (if boundary (/ 1.0 15) 0.6))))
-                         (while (< (or (plist-get (etaf-screensaver-status) :elapsed) 0) target)
+                       (let* ((status (etaf-screensaver-status))
+                              (page (plist-get status :index))
+                              (elapsed (or (plist-get status :elapsed) 0))
+                              (observed-at (float-time))
+                              (deadline (+ observed-at dwell 5))
+                              (target (- dwell (if boundary (/ 1.0 15) 0.6))))
+                         ;; Public elapsed time is sampled at frame ticks.  A
+                         ;; jittered last tick can be below TARGET even though
+                         ;; the next tick changes the page.  Interpolate only
+                         ;; the wait between observed ticks, not the measured
+                         ;; boundary work, instead of requiring that narrow
+                         ;; discrete value to occur at all.
+                         (while (< (+ elapsed (- (float-time) observed-at)) target)
+                           (sleep-for 0.005)
+                           (setq status (etaf-screensaver-status))
                            (unless (and (< (float-time) deadline)
-                                        (plist-get (etaf-screensaver-status) :active))
-                             (error "Gallery did not reach the page boundary"))
-                           (sleep-for 0.005)))
+                                        (plist-get status :active)
+                                        (eql (plist-get status :index) page))
+                             (error "Gallery preparation lost page %S: active=%S index=%S elapsed=%S target=%S"
+                                    page (plist-get status :active)
+                                    (plist-get status :index)
+                                    (plist-get status :elapsed) target))
+                           (unless (= (plist-get status :elapsed) elapsed)
+                             (setq elapsed (plist-get status :elapsed)
+                                   observed-at (float-time)))))
                        (setq primed t))
                      (let ((status (etaf-screensaver-status)))
                        (setq index (plist-get status :index)
@@ -159,13 +177,13 @@ a tiny fixture.  Generate the gallery outside Git with bake-gallery.mjs."
 
 (taf-benchmark-register
  "etaf-screensaver.gallery.boundary"
- :version 2 :modes '(batch gui) :isolation 'series :impact 'local :budget-ms 100
+ :version 3 :modes '(batch gui) :isolation 'series :impact 'local :budget-ms 100
  :description "Natural 24-second GUI boundaries across full-size gallery bundles"
  :setup (lambda (mode) (etaf-screensaver-benchmark--gallery 'full mode 'boundary)))
 
 (taf-benchmark-register
  "etaf-screensaver.gallery.transition"
- :version 2 :modes '(batch gui) :isolation 'series :impact 'local :budget-ms 100
+ :version 3 :modes '(batch gui) :isolation 'series :impact 'local :budget-ms 100
  :description "Native frames spanning a natural gallery page change (no rapid GUI cuts)"
  :setup (lambda (mode) (etaf-screensaver-benchmark--gallery 'full mode 'transition)))
 
