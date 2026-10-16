@@ -59,6 +59,9 @@
 
 ### Fixed
 
+- Sequential ANSI color and attribute changes no longer alter preceding runs
+  in recorded frames; foreground/background and attribute resets stay local.
+
 - Frame cadence stays aligned to each page's clock instead of accumulating
   timer delay; late frames skip expired slots and natural page deadlines stay
   independent of the outgoing frame's timing.

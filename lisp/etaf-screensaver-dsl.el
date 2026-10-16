@@ -292,67 +292,40 @@ display column."
         (etaf-screensaver--canvas-draw canvas row cell character color)
         (cl-incf cell (char-width character))))))
 
-(defun etaf-screensaver--canvas-run-string (run run-face run-color)
-  "Return RUN's text with RUN-FACE applied when it was set."
-  (let ((text (apply #'concat (nreverse run))))
-    (if (eq run-face :unset)
-        text
-      (propertize text 'face (list :foreground run-color)))))
-
 (defun etaf-screensaver--canvas-row (canvas row)
-  "Return ROW of CANVAS as one string with merged color runs."
+  "Return ROW of CANVAS as one owned string with merged color runs.
+Build the text once, omitting wide-character continuation cells, then paint
+its color spans without temporary per-character or per-color strings."
   (let* ((width (etaf-screensaver--canvas-width canvas))
          (chars (etaf-screensaver--canvas-chars canvas))
          (faces (etaf-screensaver--canvas-faces canvas))
          (start (* row width))
-         (end (+ start width)))
-    (if (not (cl-position etaf-screensaver--canvas-continuation chars
-                          :start start :end end))
-        (if (not (etaf-screensaver--canvas-colored canvas))
-            (concat (substring chars start end))
-          (let ((column 0)
-                (parts nil))
-            (while (< column width)
-              (let ((face (aref faces (+ start column)))
-                    (run-start column))
-                (while (and (< column width)
-                            (equal face (aref faces (+ start column))))
-                  (cl-incf column))
-                (let ((text (concat (substring chars (+ start run-start) (+ start column)))))
-                  (push (if face
-                            (propertize text 'face (list :foreground face))
-                          text)
-                        parts))))
-            (apply #'concat (nreverse parts))))
-      ;; A wide character owns the cell after it; build the row cell by cell
-      ;; and drop the continuation cells from the output.
-      (let ((column 0)
-            (parts nil)
-            (run nil)
-            (run-face :unset)
-            (run-color nil))
-        (while (< column width)
-          (let* ((index (+ start column))
-                 (character (aref chars index))
-                 (face (aref faces index)))
-            (if (eq character etaf-screensaver--canvas-continuation)
-                (progn
-                  (when run
-                    (push (etaf-screensaver--canvas-run-string run run-face run-color)
-                          parts)
-                    (setq run nil run-face :unset run-color nil))
-                  (cl-incf column))
-              (progn
-                (unless (equal (and (not (eq run-face :unset)) run-color) face)
-                  (when run
-                    (push (etaf-screensaver--canvas-run-string run run-face run-color)
-                          parts))
-                  (setq run nil run-face face run-color face))
-                (push (string character) run)
-                (cl-incf column)))))
-        (when run
-          (push (etaf-screensaver--canvas-run-string run run-face run-color) parts))
-        (apply #'concat (nreverse parts))))))
+         (end (+ start width))
+         (continuations (cl-count etaf-screensaver--canvas-continuation chars
+                                  :start start :end end))
+         (text (if (zerop continuations)
+                   (concat (substring chars start end))
+                 (let ((result (make-vector (- width continuations) ?\s))
+                       (output 0))
+                   (cl-loop for index from start below end
+                            for character = (aref chars index)
+                            unless (eq character etaf-screensaver--canvas-continuation)
+                            do (aset result output character) (cl-incf output))
+                   (concat result)))))
+    (when (etaf-screensaver--canvas-colored canvas)
+      (let ((output 0) (run-start 0) run-face)
+        (cl-loop for index from start below end
+                 unless (eq (aref chars index) etaf-screensaver--canvas-continuation)
+                 do (let ((face (aref faces index)))
+                      (unless (equal face run-face)
+                        (when run-face
+                          (put-text-property run-start output 'face
+                                             (list :foreground run-face) text))
+                        (setq run-start output run-face face))
+                      (cl-incf output)))
+        (when run-face
+          (put-text-property run-start output 'face (list :foreground run-face) text))))
+    text))
 
 (defun etaf-screensaver--canvas-compose (canvas)
   "Return CANVAS as a list of row strings with merged color runs."

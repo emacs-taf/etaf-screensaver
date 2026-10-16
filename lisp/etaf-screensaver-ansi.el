@@ -37,18 +37,35 @@
       (format "#%02x%02x%02x" level level level)))
    (t nil)))
 
-(defun etaf-screensaver--ansi-update (face parameters)
-  "Return FACE, a face plist or nil, after applying SGR PARAMETERS.
-PARAMETERS holds the semicolon-separated numbers of one SGR sequence; an
-empty string resets every attribute."
-  (if (equal parameters "")
-      nil
-    (let ((tokens (split-string parameters ";"))
+(defun etaf-screensaver--ansi-numbers (text start end)
+  "Read semicolon-separated SGR numbers in TEXT's START..END range.
+Return a vector of integers, with nil for empty fields, without token strings."
+  (let ((number 0) digits numbers)
+    (while (< start end)
+      (let ((character (aref text start)))
+        (if (= character ?\;)
+            (progn (push (and digits number) numbers)
+                   (setq number 0 digits nil))
+          (setq number (+ (* number 10) (- character ?0)) digits t)))
+      (cl-incf start))
+    (push (and digits number) numbers)
+    (vconcat (nreverse numbers))))
+
+(defun etaf-screensaver--ansi-number (numbers index)
+  "Return NUMBERS' INDEX value, defaulting an absent or empty field to zero."
+  (or (and (< index (length numbers)) (aref numbers index)) 0))
+
+(defun etaf-screensaver--ansi-update (face text start end)
+  "Apply TEXT's START..END SGR range to a fresh copy of FACE.
+An empty range resets all attributes.  Previously emitted runs keep their
+own face values when a later sequence changes or removes an attribute."
+  (unless (= start end)
+    (let ((tokens (etaf-screensaver--ansi-numbers text start end))
+          (face (copy-sequence face))
           (index 0))
       (while (< index (length tokens))
-        (let ((text (nth index tokens)))
-          (unless (equal text "")
-            (let ((value (string-to-number text)))
+        (let ((value (aref tokens index)))
+          (when value
               (cond
                ((= value 0) (setq face nil))
                ((= value 1) (setq face (plist-put face :weight 'bold)))
@@ -78,29 +95,29 @@ empty string resets every attribute."
                                       (aref etaf-screensaver--ansi-colors (- value 92)))))
                ((or (= value 38) (= value 48))
                 (let ((slot (if (= value 38) :foreground :background))
-                      (kind (string-to-number (or (nth (1+ index) tokens) ""))))
+                      (kind (etaf-screensaver--ansi-number tokens (1+ index))))
                   (cond
                    ((= kind 5)
                     (when-let* ((color (etaf-screensaver--ansi-256-color
-                                        (string-to-number
-                                         (or (nth (+ index 2) tokens) "")))))
+                                        (etaf-screensaver--ansi-number tokens (+ index 2)))))
                       (setq face (plist-put face slot color))
                       (cl-incf index 2)))
                    ((= kind 2)
-                    (let ((red (string-to-number (or (nth (+ index 2) tokens) "")))
-                          (green (string-to-number (or (nth (+ index 3) tokens) "")))
-                          (blue (string-to-number (or (nth (+ index 4) tokens) ""))))
+                    (let ((red (etaf-screensaver--ansi-number tokens (+ index 2)))
+                          (green (etaf-screensaver--ansi-number tokens (+ index 3)))
+                          (blue (etaf-screensaver--ansi-number tokens (+ index 4))))
                       (when (and (<= 0 red 255) (<= 0 green 255) (<= 0 blue 255))
                         (setq face (plist-put face slot
                                               (format "#%02x%02x%02x" red green blue)))
-                        (cl-incf index 4)))))))))))
-        (cl-incf index)))
-    face))
+                        (cl-incf index 4))))))))))
+        (cl-incf index))
+      face)))
 
 (defun etaf-screensaver--ansi-run (text start end face)
   "Return TEXT's START..END substring carrying FACE, or plain text."
   (let ((chunk (substring text start end)))
-    (if face (propertize chunk 'face face) chunk)))
+    (when face (put-text-property 0 (length chunk) 'face face chunk))
+    chunk))
 
 (defun etaf-screensaver--ansi-render (text)
   "Return TEXT with every SGR run converted to a `face' text property."
@@ -110,10 +127,11 @@ empty string resets every attribute."
       (while (string-match etaf-screensaver--ansi-sgr-regexp text index)
         (let ((begin (match-beginning 0))
               (finish (match-end 0))
-              (parameters (match-string 1 text)))
+              (parameters-start (match-beginning 1))
+              (parameters-end (match-end 1)))
           (when (< start begin)
             (push (etaf-screensaver--ansi-run text start begin face) parts))
-          (setq face (etaf-screensaver--ansi-update face parameters)
+          (setq face (etaf-screensaver--ansi-update face text parameters-start parameters-end)
                 start finish
                 index finish)))
       (when (< start length)
@@ -134,18 +152,18 @@ empty string resets every attribute."
   "Classify the semicolon-separated SGR PARAMETERS string.
 Return a plist with :colors, most capable first, among `truecolor',
 `256-color' and `16-color', and :attributes for the modifiers that appear."
-  (let ((tokens (split-string parameters ";"))
+  (let ((tokens (etaf-screensaver--ansi-numbers parameters 0 (length parameters)))
         (position 0) (truecolor nil) (color-256 nil) (color-16 nil) (attributes nil))
     (unless (equal parameters "")
       (while (< position (length tokens))
-        (let ((value (string-to-number (nth position tokens))))
+        (let ((value (etaf-screensaver--ansi-number tokens position)))
           (cond
            ((and (>= value 30) (<= value 37)) (setq color-16 t))
            ((and (>= value 40) (<= value 47)) (setq color-16 t))
            ((and (>= value 90) (<= value 97)) (setq color-16 t))
            ((and (>= value 100) (<= value 107)) (setq color-16 t))
            ((or (= value 38) (= value 48))
-            (let ((kind (string-to-number (or (nth (1+ position) tokens) ""))))
+            (let ((kind (etaf-screensaver--ansi-number tokens (1+ position))))
               (cond ((= kind 5) (setq color-256 t))
                     ((= kind 2) (setq truecolor t)))))
            ((memq value '(1 2 3 4 7 9))

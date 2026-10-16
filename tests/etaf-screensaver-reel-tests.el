@@ -96,6 +96,41 @@
         (etaf-screensaver-stop)
         (should-not (plist-get (etaf-screensaver-status) :active))))))
 
+(ert-deftest etaf-screensaver-reel-tests-ansi-runs-keep-independent-attributes ()
+  "Later SGR changes and resets never recolor or restyle preceding runs."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file)))
+      (etaf-screensaver-reel-tests--provider
+       'reel-test-sgr-runs
+       (vector (concat "\e[;31mA\e[32mB\e[1mC\e[22mD\e[38;2;1;2;3m中"
+                       "\e[38;5;202mE\e[39mF\e[48;2;4;5;6mG\e[49mH\e[mI"))
+       11 1 nil t)
+      (etaf-screensaver-register-reel
+       (list :id 'reel-test-sgr-runs :provider 'reel-test-sgr-runs :recording file))
+      (let* ((buffer (etaf-screensaver-start 'reel-test-sgr-runs))
+             (text (etaf-screensaver-reel-tests--text buffer))
+             (start (string-match "ABCD中EFGHI" text)))
+        (should start)
+        (with-current-buffer buffer
+          (cl-loop for expected in '("#cd0000" "#00cd00" "#00cd00" "#00cd00"
+                                      "#010203" "#ff5f00")
+                   for index from 0
+                   do (let* ((faces (get-text-property (+ (point-min) start index) 'face))
+                             (color (cl-loop for face in faces
+                                             when (and (listp face) (plist-get face :foreground))
+                                             return (plist-get face :foreground))))
+                        (should (equal color expected))))
+          (dolist (check '((2 :weight bold t) (3 :weight bold nil)
+                           (6 :foreground "#ff5f00" nil)
+                           (7 :background "#040506" t) (8 :background "#040506" nil)
+                           (9 :foreground "#ff5f00" nil)))
+            (let* ((faces (get-text-property (+ (point-min) start (car check)) 'face))
+                   (present (cl-some (lambda (face)
+                                       (and (listp face)
+                                            (equal (plist-get face (nth 1 check)) (nth 2 check))))
+                                     faces)))
+              (should (eq (not (null present)) (nth 3 check))))))))))
+
 (ert-deftest etaf-screensaver-reel-tests-wide-ansi-frames-keep-colors ()
   "ANSI frames with wide characters publish centered colored cells."
   (etaf-screensaver-reel-tests--clean

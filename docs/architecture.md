@@ -55,7 +55,9 @@ can clip all old glyphs, and the newly fitted rows must still replace them.
 Each scene renders its own frame text.
 Canvas cells are character vectors, so writes do not depend on UTF-8 byte
 width. Composition preserves wide-character continuation cells and merges
-adjacent colors. The expression interpreter evaluates only its whitelist;
+adjacent colors. Row projection builds one string, omits continuation cells
+and paints color spans directly instead of joining per-cell or per-color
+strings. The expression interpreter evaluates only its whitelist;
 common unary/binary arithmetic does not allocate an argument list per
 expression. A dense field builds closures over that same whitelist and reuses
 exact subexpression values along invariant spatial/time axes. Its caches and
@@ -72,8 +74,11 @@ algorithms. A provider turns one native format into frame strings and
 metadata; it is registered by id with match and read functions, extension
 hints and a license. The built-in `tte` provider validates Terminal Text
 Effects recordings, a zlib stream of tagged records, and converts SGR runs
-into the same face properties the canvas uses. No provider runs a process:
-playback reads bytes and leaves the recording in its native format.
+into the same face properties the canvas uses. The SGR parser reads numeric
+fields directly from the source ranges, without splitting parameter strings.
+Each sequence derives a fresh face value; later changes and resets cannot
+mutate preceding runs. No provider runs a process: playback reads bytes and
+leaves the recording in its native format.
 
 The reel layer owns provider-independent behavior: per-frame timing from the
 recording, looping, lazy per-frame SGR conversion, wide-character aware
