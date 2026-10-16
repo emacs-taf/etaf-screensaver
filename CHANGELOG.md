@@ -4,6 +4,12 @@
 
 ### Added
 
+- A rebuildable 24-work moving gallery, with six light compositions and three
+  dark packs. Offline baking reuses Vanta and MilkDrop renderers, retains their
+  attribution and licenses, and can crossfade each reel's loop seam.
+- Bounded, atomic canvas baking with deterministic preset/effect seeds,
+  frame-by-frame warmup, additional preset packs and offline CLI tests.
+
 - Independent presentation selection: full canvas, gallery card, cinema band
   with clock, and a mosaic of up to four independently animated works. Choose
   globally or per program group/item; narrow walls stack their works.
@@ -12,7 +18,7 @@
   algorithms. The built-in `tte` provider reads Terminal Text Effects
   recordings, and `etaf-screensaver-import-recording` and
   `etaf-screensaver-import-directory` validate, copy and report compatible
-  files with dimensions, color depths and license. Three recorded reels ship
+  files with dimensions, color depths and license. Fourteen recorded reels ship
   in `lisp/reels` and join the default program. Other tools can register a
   reader through `etaf-screensaver-define-reel-provider`.
 - Image-frame reels: the built-in `frames` provider reads a JSON manifest
@@ -49,6 +55,8 @@
 
 ### Fixed
 
+- Image bundle imports reject escaping frame paths and oversized manifests,
+  declared canvases, frame lists and encoded image payloads before copying.
 - Color-only animation frames now repaint instead of freezing after the first
   tick. Image rows reserve their complete footprint and align to whole rows.
 - Default pack playback includes its trailing works instead of repeatedly

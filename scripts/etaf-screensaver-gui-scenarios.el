@@ -239,5 +239,92 @@
       (etaf-gui-verifier-run (etaf-screensaver-gui--scenario) directory)
     (etaf-screensaver-mode -1)))
 
+(defun etaf-screensaver-gui-run-gallery (directory gallery-file)
+  "Review the installed GALLERY-FILE through public playback in DIRECTORY.
+Run only in an owned GUI.  Captures cover every work and four layouts at
+four viewport sizes; visual inspection remains a separate requirement."
+  (load (expand-file-name gallery-file) nil t)
+  (let* ((packs (cl-remove-if-not
+                 (lambda (pack) (string-prefix-p "gallery-" (symbol-name (car pack))))
+                 etaf-screensaver-packs))
+         (works (apply #'append (mapcar (lambda (pack) (plist-get (cdr pack) :scenes)) packs)))
+         (page '(frames-cloud-atlas frames-orbital-mobile frames-royal-flow frames-living-cells))
+         (editor (generate-new-buffer " *Gallery review editor*")))
+    (unless works (error "The installed gallery has no works"))
+    (unwind-protect
+        (etaf-gui-verifier-run
+         (etaf-gui-verifier-scenario-create
+          :name "etaf-screensaver-gallery"
+          :claim "Installed artwork moves in every layout and releases playback on input"
+          :initialize
+          (lambda (context)
+            (etaf-screensaver-mode -1)
+            (switch-to-buffer editor) (delete-other-windows)
+            (set-frame-size nil 130 46)
+            (setf (etaf-gui-verifier-context-target-buffer context) editor))
+          :invariants
+          (lambda (context)
+            (let ((buffer (etaf-gui-verifier-context-target-buffer context)))
+              (append (list (etaf-gui-verifier-assert "target-selected" (eq (window-buffer) buffer)))
+                      (etaf-gui-verifier-line-height-assertions buffer))))
+          :actions
+          (append
+           (mapcar
+            (lambda (scene)
+              (etaf-screensaver-gui--action
+               (symbol-name scene)
+               (lambda (context)
+                 (etaf-screensaver-stop)
+                 (setf (etaf-gui-verifier-context-target-buffer context)
+                       (etaf-screensaver-start (list :scene scene :presentation 'full))))
+               (lambda (_context)
+                 (let ((status (etaf-screensaver-status)))
+                   (and (eq (plist-get status :scene) scene)
+                        (>= (or (plist-get status :ticks) 0) 12))))))
+            works)
+           (cl-loop for size in '((130 . 46) (90 . 40) (64 . 30) (100 . 16)) append
+                    (cl-loop for style in '(full card band mosaic) collect
+                             (let ((size size) (style style))
+                               (etaf-screensaver-gui--action
+                                (format "gallery-%s-%dx%d" style (car size) (cdr size))
+                                (lambda (context)
+                                  (etaf-screensaver-stop)
+                                  (set-frame-size nil (car size) (cdr size))
+                                  (setf (etaf-gui-verifier-context-target-buffer context)
+                                        (etaf-screensaver-start
+                                         (list :presentation style :scenes page))))
+                                (lambda (_context)
+                                  (let ((status (etaf-screensaver-status)))
+                                    (and (eq (plist-get status :presentation) style)
+                                         (= (frame-width) (car size)) (= (frame-height) (cdr size))
+                                         (>= (or (plist-get status :ticks) 0) 5))))))))
+           (list
+            (etaf-screensaver-gui--action
+             "gallery-natural-round"
+             (lambda (context)
+               (etaf-screensaver-stop)
+               (set-frame-size nil 130 46)
+               (setf (etaf-gui-verifier-context-target-buffer context)
+                     (etaf-screensaver-start
+                      '(:scenes ((:scene frames-porcelain-mist :presentation card)
+                                 (:scene frames-royal-flow :presentation band))))))
+             (lambda (_context)
+               (let ((status (etaf-screensaver-status)))
+                 (unless (plist-get status :active) (error "Gallery stopped before its round finished"))
+                 (>= (or (plist-get status :index) 0) 2))) 65)
+            (etaf-screensaver-gui--action
+             "gallery-wake"
+             (lambda (context)
+               (execute-kbd-macro (kbd "x"))
+               (setf (etaf-gui-verifier-context-target-buffer context) editor))
+             (lambda (_context)
+               (and (not (plist-get (etaf-screensaver-status) :active))
+                    (eq (window-buffer) editor)
+                    (with-current-buffer editor (zerop (buffer-size))))))))
+          :completion (lambda (_context) (not (plist-get (etaf-screensaver-status) :active))))
+         directory)
+      (etaf-screensaver-mode -1)
+      (when (buffer-live-p editor) (kill-buffer editor)))))
+
 (provide 'etaf-screensaver-gui-scenarios)
 ;;; etaf-screensaver-gui-scenarios.el ends here

@@ -1,333 +1,292 @@
 #!/usr/bin/env node
-// Bake a canvas animation into an image-frame bundle for etaf-screensaver.
-//
-// Two modes:
-//   --preset NAME   render a Butterchurn (MilkDrop) preset through a bundled
-//                   harness with virtual time, so baking runs as fast as the
-//                   GPU renders and is reproducible
-//   --url URL       capture any page's <canvas> in real time (p5 sketches,
-//                   shader previews); --canvas selects the element
-//
-// The bundle holds f%05d.<ext> frames plus a frames.json manifest that
-// `etaf-screensaver-import-recording` reads.  Nothing here runs at playback.
-//
-// Usage:
-//   node bake-canvas-frames.mjs --list-presets
-//   node bake-canvas-frames.mjs --preset "$$$ Royal - Mashup (197)" \
-//     --seconds 10 --fps 24 --width 960 --height 540 --out /tmp/reel
-//   node bake-canvas-frames.mjs --url file:///path/sketch.html \
-//     --seconds 8 --fps 20 --width 800 --height 450 --out /tmp/reel
-//
-// Prerequisites for --preset: `npm install butterchurn butterchurn-presets`
-// in --modules (default ./node_modules).  A Chrome with remote debugging on
-// --cdp-port (default 9222) must be running; the script opens and closes its
-// own tab and never touches other tabs.
-
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Bounded, atomic offline canvas baking. Playback never invokes this tool.
 import { createServer } from 'node:http';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { extname, basename, join, normalize, resolve } from 'node:path';
-
-const DEFAULTS = {
-  cdpPort: 9222,
-  modules: 'node_modules',
-  fps: 24,
-  seconds: 10,
-  width: 960,
-  height: 540,
-  format: 'webp',
-  quality: 0.75,
-  manifest: null,
-  canvas: 'canvas',
-  warmup: 2,
-  audio: 'synthetic',
-};
-
-function usage(message) {
-  if (message) console.error('error: ' + message);
-  console.error(`usage: node bake-canvas-frames.mjs (--preset NAME [--modules DIR] | --url URL [--canvas SEL])
-       [--seconds S] [--fps N] [--width W] [--height H] [--warmup S]
-       [--out DIR] [--manifest NAME] [--format webp|jpeg|png] [--quality Q]
-       [--source TEXT] [--license TEXT] [--cdp-port N] [--list-presets]`);
-  process.exit(2);
-}
-
-function parseArguments(argv) {
-  const options = { ...DEFAULTS, out: null, preset: null, url: null, source: null, license: null, listPresets: false };
-  for (let index = 0; index < argv.length; index++) {
-    const flag = argv[index];
-    const value = () => {
-      if (index + 1 >= argv.length) usage(`${flag} needs a value`);
-      return argv[++index];
-    };
-    switch (flag) {
-      case '--preset': options.preset = value(); break;
-      case '--url': options.url = value(); break;
-      case '--canvas': options.canvas = value(); break;
-      case '--seconds': options.seconds = Number(value()); break;
-      case '--fps': options.fps = Number(value()); break;
-      case '--width': options.width = Number(value()); break;
-      case '--height': options.height = Number(value()); break;
-      case '--warmup': options.warmup = Number(value()); break;
-      case '--out': options.out = resolve(value()); break;
-      case '--manifest': options.manifest = value(); break;
-      case '--format': options.format = value(); break;
-      case '--quality': options.quality = Number(value()); break;
-      case '--source': options.source = value(); break;
-      case '--license': options.license = value(); break;
-      case '--cdp-port': options.cdpPort = Number(value()); break;
-      case '--audio': options.audio = value(); break;
-      case '--modules': options.modules = resolve(value()); break;
-      case '--list-presets': options.listPresets = true; break;
-      case '--help': usage(); break;
-      default: usage(`unknown flag ${flag}`);
-    }
-  }
-  if (options.listPresets) return options;
-  if (!options.out) usage('--out is required');
-  if (!!options.preset === !!options.url) usage('pass exactly one of --preset or --url');
-  if (!(options.seconds > 0) || !(options.fps > 0) || !(options.width > 0) || !(options.height > 0)) {
-    usage('--seconds, --fps, --width and --height must be positive');
-  }
-  if (!['webp', 'jpeg', 'png'].includes(options.format)) usage('--format must be webp, jpeg or png');
-  if (!['synthetic', 'silence'].includes(options.audio)) usage('--audio must be synthetic or silence');
-  if (!options.manifest) options.manifest = `${basename(options.out)}.frames.json`;
-  if (!(options.quality > 0 && options.quality <= 1)) usage('--quality must be in (0, 1]');
-  return options;
-}
+import { mkdir, mkdtemp, readFile, writeFile, rename, rm, lstat } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { EFFECTS, PACKS, rendererFiles, rendererHarness, captureHarness } from './canvas-renderers.mjs';
 
 const MIME = { webp: 'image/webp', jpeg: 'image/jpeg', png: 'image/png' };
-const QUALITY = { webp: [0.1, 1], jpeg: [0.1, 1], png: [0, 1] };
+const HELP = `usage: node scripts/bake-canvas-frames.mjs (--preset NAME | --effect NAME | --url URL) --out DIR
+  --modules DIR        npm modules (default ./node_modules)
+  --packs LIST         comma-separated Butterchurn packs; default base,extra,extra2
+  --list-presets        list available presets without baking
+  --effect-options FILE  JSON object of Vanta numeric/color options
+  --canvas SELECTOR    URL mode canvas selector (default canvas)
+  --seconds S --fps N  recording duration and rate (default 20 seconds, 15 fps)
+  --width W --height H canvas pixels (default 960x540; at most 2073600 pixels)
+  --warmup S          advance every frame before recording (default 6 seconds)
+  --loop S            crossfade tail to head; omit leading S seconds (default 0)
+  --seed N            nonzero 32-bit seed for preset/effect mode (default 4242)
+  --audio MODE        synthetic or silence (default synthetic)
+  --format FORMAT --quality Q  jpeg|webp|png, quality in (0,1] (default jpeg,0.82)
+  --manifest NAME     basename ending in .frames.json (default OUT.frames.json)
+  --source TEXT --license TEXT  attribution; upstream notices included automatically
+  --cdp-port N        local Chrome debug port (default 9222)
+  --timeout S        total deadline, including navigation (default 300, max 1800)
+  --request-timeout S per CDP/HTTP request deadline (default 15, max 60)
+  --max-bytes N      encoded bundle byte budget (default 268435456, max 1073741824)
+  help | --help      show this usage
+Effects: ${EFFECTS.join(', ')}
+Packs: ${PACKS.join(', ')}
+An existing output is never overwritten. Failure removes only this run's staging
+files and tab. URL mode uses real time; preset/effect mode uses a virtual clock.
+Requires Node 22+, Chrome CDP, and local upstream npm modules for those modes.`;
 
-function butterchurnHarness(options) {
-  return `<!doctype html><html><head><meta charset="utf-8">
-<style>html,body{margin:0;background:#000}canvas{display:block}</style>
-<script>
-window.__vt = 0;
-performance.now = () => window.__vt;
-window.__bake = { ready: false, error: null };
-</script>
-<script src="/modules/butterchurn/lib/butterchurn.min.js"></script>
-<script src="/modules/butterchurn-presets/lib/butterchurnPresets.min.js"></script>
-<script>
-window.__bake.names = () => Object.keys(butterchurnPresets.getPresets());
-window.__bake.start = function (opts) {
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = opts.width; canvas.height = opts.height;
-    document.body.appendChild(canvas);
-    const engine = butterchurn.default || butterchurn;
-    const visualizer = engine.createVisualizer(new AudioContext(), canvas,
-      { width: opts.width, height: opts.height, pixelRatio: 1 });
-    // MilkDrop presets react to spectrum levels; feed a deterministic
-    // waveform driven by virtual time so an offline bake is reproducible
-    // and presets that need audio do not stay black.
-    const audioSize = visualizer.audio.fftSize;
-    let seed = 987654321;
-    const random = () => {
-      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
-      return ((seed >>> 0) % 1024) / 1024;
-    };
-    const audioLevels = (seconds) => {
-      const bass = 0.55 + 0.45 * Math.sin(seconds * Math.PI * 2 * 0.45);
-      const mid = 0.5 + 0.5 * Math.sin(seconds * Math.PI * 2 * 1.1 + 1.7);
-      const treble = 0.5 + 0.5 * Math.sin(seconds * Math.PI * 2 * 2.3 + 0.4);
-      const bytes = new Uint8Array(audioSize);
-      for (let index = 0; index < audioSize; index++) {
-        const phase = (index / audioSize) * Math.PI * 2;
-        const sample = 0.5 * Math.sin(phase * 3) * bass
-                     + 0.25 * (random() * 2 - 1) * mid
-                     + 0.15 * Math.sin(phase * 40) * treble;
-        bytes[index] = Math.max(0, Math.min(255, Math.round(128 + 120 * sample)));
-      }
-      return { timeByteArray: bytes, timeByteArrayL: bytes, timeByteArrayR: bytes };
-    };
-    const preset = butterchurnPresets.getPresets()[opts.preset];
-    if (!preset) throw new Error('unknown preset: ' + opts.preset);
-    visualizer.loadPreset(preset, 0);
-    window.__bake.advance = function (milliseconds) {
-      window.__vt += milliseconds;
-      visualizer.render(opts.audio === 'synthetic'
-        ? { audioLevels: audioLevels(window.__vt / 1000), elapsedTime: milliseconds / 1000 }
-        : { elapsedTime: milliseconds / 1000 });
-    };
-    window.__bake.render = function (milliseconds) {
-      window.__bake.advance(milliseconds);
-      return canvas.toDataURL(opts.mime, opts.quality);
-    };
-    window.__bake.ready = true;
-  } catch (error) { window.__bake.error = String(error && error.stack || error); }
-};
-</script></head><body></body></html>`;
+function fail(message) { throw new Error(message); }
+function bounded(value, min, max, name, integer = false) {
+  if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value)))
+    fail(`${name} must be ${integer ? 'an integer ' : ''}in [${min}, ${max}]`);
 }
-
-async function serveDirectory(modules, harness) {
-  const server = createServer(async (request, response) => {
-    const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-    try {
-      let body, type;
-      if (path === '/harness.html' && harness) {
-        body = harness;
-        type = 'text/html';
-      } else if (path.startsWith('/modules/')) {
-        const file = normalize(join(modules, path.slice('/modules/'.length)));
-        if (file !== modules && !file.startsWith(modules + '/')) throw new Error('forbidden');
-        body = await readFile(file);
-        type = { '.js': 'text/javascript' }[extname(file)] || 'application/octet-stream';
-      } else {
-        throw new Error('not found');
-      }
-      response.writeHead(200, { 'content-type': type });
-      response.end(body);
-    } catch (error) {
-      response.writeHead(404);
-      response.end(String(error));
-    }
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { server, port: server.address().port };
+function parse(argv) {
+  const o = { modules: resolve('node_modules'), cdpPort:9222, fps:15, seconds:20,
+    width:960, height:540, warmup:6, loop:0, seed:4242, audio:'synthetic', format:'jpeg', quality:0.82,
+    canvas:'canvas', packs:['base','extra','extra2'], timeout:300, requestTimeout:15, maxBytes:268435456 };
+  const flags = { '--preset':'preset', '--effect':'effect', '--url':'url', '--out':'out', '--modules':'modules',
+    '--packs':'packs', '--effect-options':'effectOptionsFile', '--canvas':'canvas', '--seconds':'seconds',
+    '--fps':'fps', '--width':'width', '--height':'height', '--warmup':'warmup', '--loop':'loop', '--seed':'seed',
+    '--audio':'audio', '--format':'format', '--quality':'quality', '--manifest':'manifest', '--source':'source',
+    '--license':'license', '--cdp-port':'cdpPort', '--timeout':'timeout', '--request-timeout':'requestTimeout',
+    '--max-bytes':'maxBytes' };
+  for (let i=0; i<argv.length; i++) {
+    if (argv[i] === '--list-presets') { o.listPresets=true; continue; }
+    const key=flags[argv[i]];
+    if (!key || i+1>=argv.length) fail(`Unknown or incomplete option: ${argv[i]}`);
+    const value=argv[++i];
+    o[key]=typeof o[key] === 'number' ? Number(value) : value;
+  }
+  if (typeof o.packs === 'string') o.packs=o.packs.split(',');
+  if (!o.packs.length || o.packs.some(p=>!PACKS.includes(p))) fail('Unknown preset pack');
+  bounded(o.cdpPort,1,65535,'--cdp-port',true);
+  bounded(o.timeout,0.1,1800,'--timeout'); bounded(o.requestTimeout,0.1,60,'--request-timeout');
+  bounded(o.width,1,2048,'--width',true); bounded(o.height,1,2048,'--height',true);
+  bounded(o.width*o.height,1,2073600,'canvas pixels');
+  bounded(o.fps,1,60,'--fps',true); bounded(o.seconds,0.01,300,'--seconds');
+  bounded(o.warmup,0,120,'--warmup'); bounded(o.loop,0,5,'--loop');
+  bounded(o.seed,1,4294967295,'--seed',true); bounded(o.quality,0.001,1,'--quality');
+  bounded(o.maxBytes,1,1073741824,'--max-bytes',true);
+  o.frameCount=Math.round(o.fps*o.seconds); o.loopFrames=Math.round(o.fps*o.loop);
+  bounded(o.frameCount,1,7200,'frame count',true);
+  if (o.loopFrames*2 >= o.frameCount) fail('--loop must be shorter than half the recording');
+  bounded(o.loopFrames*o.width*o.height,0,67108864,'retained loop pixels');
+  if (!MIME[o.format]) fail('--format must be jpeg, webp or png');
+  if (!['synthetic','silence'].includes(o.audio)) fail('--audio must be synthetic or silence');
+  if (o.effect && !EFFECTS.includes(o.effect)) fail('Unknown Vanta effect');
+  if (o.url && !['http:','https:','file:'].includes(new URL(o.url).protocol)) fail('Unsupported URL protocol');
+  if (!o.listPresets && ([o.preset,o.effect,o.url].filter(Boolean).length !== 1 || !o.out))
+    fail('Pass exactly one of --preset, --effect or --url, and --out');
+  if (o.listPresets && (o.effect || o.url)) fail('--list-presets is only for Butterchurn');
+  if (o.effectOptionsFile && !o.effect) fail('--effect-options requires --effect');
+  o.modules=resolve(o.modules);
+  if (o.out) {
+    o.out=resolve(o.out);
+    o.manifest ??= `${basename(o.out)}.frames.json`;
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.frames\.json$/.test(o.manifest))
+      fail('--manifest must be a basename ending in .frames.json');
+  }
+  o.mime=MIME[o.format];
+  return o;
 }
 
 class Cdp {
-  constructor(socket) {
-    this.socket = socket;
-    this.nextId = 1;
-    this.pending = new Map();
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      const waiter = message.id && this.pending.get(message.id);
-      if (!waiter) return;
-      this.pending.delete(message.id);
-      if (message.error) waiter.reject(new Error(JSON.stringify(message.error)));
-      else waiter.resolve(message.result);
-    };
+  constructor(socket, signal, timeout) {
+    this.socket=socket; this.signal=signal; this.timeout=timeout; this.nextId=0; this.pending=new Map();
+    this.abort=()=>this.rejectAll(signal.reason || new Error('Baking cancelled'));
+    signal.addEventListener('abort',this.abort,{once:true});
+    socket.addEventListener('close',()=>this.rejectAll(new Error('CDP socket closed')));
+    socket.addEventListener('error',()=>this.rejectAll(new Error('CDP socket failed')));
+    socket.addEventListener('message',event=>{
+      try {
+        const message=JSON.parse(event.data), waiter=this.pending.get(message.id);
+        if (waiter) {
+          clearTimeout(waiter.timer); this.pending.delete(message.id);
+          if (message.error) waiter.reject(new Error(message.error.message)); else waiter.resolve(message.result);
+        } else if (message.method === 'Runtime.exceptionThrown') {
+          this.browserError=message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text;
+        } else if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
+          this.browserError=message.params.args.map(a=>a.value || a.description || '').join(' ');
+        }
+      } catch (error) { this.rejectAll(error); }
+    });
   }
-  send(method, params = {}) {
-    return new Promise((resolve, reject) => {
-      const id = this.nextId++;
-      this.pending.set(id, { resolve, reject });
-      this.socket.send(JSON.stringify({ id, method, params }));
+  rejectAll(error) {
+    this.closedError=error;
+    for (const waiter of this.pending.values()) { clearTimeout(waiter.timer); waiter.reject(error); }
+    this.pending.clear();
+  }
+  send(method,params={}) {
+    this.signal.throwIfAborted();
+    if (this.closedError) return Promise.reject(this.closedError);
+    return new Promise((resolve,reject)=>{
+      const id=++this.nextId;
+      const timer=setTimeout(()=>{ this.pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); },this.timeout);
+      this.pending.set(id,{resolve,reject,timer});
+      try { this.socket.send(JSON.stringify({id,method,params})); }
+      catch (error) { clearTimeout(timer); this.pending.delete(id); reject(error); }
     });
   }
   async evaluate(expression) {
-    const result = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
+    if (this.browserError) fail(`Browser error: ${this.browserError}`);
+    const result=await this.send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
+    if (result.exceptionDetails) fail(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+    if (this.browserError) fail(`Browser error: ${this.browserError}`);
     return result.result.value;
   }
+  close() { this.signal.removeEventListener('abort',this.abort); this.socket.close(); }
 }
 
-async function connect(port) {
-  let targets;
+async function exists(path) {
+  try { await lstat(path); return true; } catch (error) { if (error.code==='ENOENT') return false; throw error; }
+}
+async function serve(options) {
+  const files=rendererFiles(options), bodies=await Promise.all(files.map(f=>readFile(join(options.modules,f))));
+  const page=rendererHarness(options);
+  const server=createServer((request,response)=>{
+    const index=files.findIndex((_,i)=>request.url===`/module-${i}.js`);
+    if (request.url === '/harness.html') { response.setHeader('content-type','text/html'); response.end(page); }
+    else if (index>=0) { response.setHeader('content-type','text/javascript'); response.end(bodies[index]); }
+    else { response.writeHead(404); response.end('Not found'); }
+  });
+  await new Promise((resolve,reject)=>{ server.once('error',reject); server.listen(0,'127.0.0.1',resolve); });
+  return server;
+}
+async function upstreamNotices(o) {
+  const paths=o.effect ? ['vanta/LICENSE.md','three/LICENSE']
+    : ['butterchurn/LICENSE','butterchurn-presets/LICENSE'];
+  return (await Promise.all(paths.map(async p=>`${p}\n${await readFile(join(o.modules,p),'utf8')}`))).join('\n\n');
+}
+function encodedImage(data,mime) {
+  const prefix=`data:${mime};base64,`;
+  if (typeof data !== 'string' || !data.startsWith(prefix)) fail(`Canvas did not encode ${mime}`);
+  const body=data.slice(prefix.length);
+  if (!body.length || body.length%4 || !/^[A-Za-z0-9+/]*={0,2}$/.test(body)) fail('Malformed canvas image');
+  const bytes=Buffer.from(body,'base64');
+  const valid=mime==='image/png' ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+    : mime==='image/jpeg' ? bytes[0]===255 && bytes[1]===216 && bytes[2]===255
+      : bytes.toString('ascii',0,4)==='RIFF' && bytes.toString('ascii',8,12)==='WEBP';
+  if (!valid) fail('Canvas image signature disagrees with MIME');
+  return bytes;
+}
+
+async function bake(o) {
+  const controller=new AbortController(), signal=controller.signal;
+  const timer=setTimeout(()=>controller.abort(new Error('Total baking deadline exceeded')),o.timeout*1000);
+  const onSignal=()=>controller.abort(new Error('Baking interrupted'));
+  process.once('SIGINT',onSignal); process.once('SIGTERM',onSignal);
+  let server, target, socket, cdp, stage, lock;
+  const endpoint=`http://127.0.0.1:${o.cdpPort}`;
+  const request=async (path,init={})=>{
+    const response=await fetch(endpoint+path,{...init,signal:AbortSignal.any([signal,AbortSignal.timeout(o.requestTimeout*1000)])});
+    if (!response.ok) fail(`CDP HTTP ${response.status}`);
+    return response;
+  };
   try {
-    targets = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
-  } catch (error) {
-    throw new Error(`Chrome with remote debugging is not reachable on port ${port} (${error.message})`);
-  }
-  const socket = new WebSocket(targets.webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = () => reject(new Error('CDP socket failed')); });
-  const cdp = new Cdp(socket);
-  await cdp.send('Runtime.enable');
-  await cdp.send('Page.enable');
-  return { cdp, socket, target: targets };
-}
-
-async function poll(attempts, delayMs, test, description) {
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    const value = await test();
-    if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-  throw new Error(description);
-}
-
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
-  const { cdp, socket, target } = await connect(options.cdpPort);
-  let server;
-  try {
-    if (options.preset || options.listPresets) {
-      const butterchurn = join(options.modules, 'butterchurn/lib/butterchurn.min.js');
-      const presets = join(options.modules, 'butterchurn-presets/lib/butterchurnPresets.min.js');
-      for (const file of [butterchurn, presets]) {
-        if (!existsSync(file)) {
-          throw new Error(`missing ${file}; run: npm install butterchurn butterchurn-presets --prefix ${options.modules}`);
-        }
-      }
-      const served = await serveDirectory(options.modules, butterchurnHarness(options));
-      server = served.server;
-      await cdp.send('Page.navigate', { url: `http://127.0.0.1:${served.port}/harness.html` });
-      await poll(200, 50, () => cdp.evaluate('typeof window.__bake === "object" && typeof butterchurnPresets === "function"'),
-                 'harness page never loaded');
-      const names = await cdp.evaluate('__bake.names()');
-      if (options.listPresets) {
-        console.log(names.join('\n'));
-        return;
-      }
-      if (options.format === 'webp') {
-        const probe = await cdp.evaluate(
-          "document.createElement('canvas').toDataURL('image/webp').slice(0, 15)");
-        if (probe !== 'data:image/webp') {
-          console.error('note: this browser cannot encode webp from a canvas; using jpeg');
-          options.format = 'jpeg';
-        }
-      }
-      options.mime = MIME[options.format];
-      await cdp.evaluate(`__bake.start(${JSON.stringify({ width: options.width, height: options.height, preset: options.preset, mime: options.mime, quality: options.quality, audio: options.audio })})`);
-      await poll(200, 50, () => cdp.evaluate('__bake.error || (__bake.ready ? "ready" : "")'),
-                 'butterchurn never became ready');
-      if (options.warmup > 0) {
-        await cdp.evaluate(`__bake.advance(${options.warmup * 1000})`);
-      }
-    } else {
-      await cdp.send('Emulation.setDeviceMetricsOverride',
-                     { width: options.width, height: options.height, deviceScaleFactor: 1, mobile: false });
-      await cdp.send('Page.navigate', { url: options.url });
-      await poll(200, 100, () => cdp.evaluate(`!!document.querySelector(${JSON.stringify(options.canvas)})`),
-                 `canvas ${options.canvas} never appeared`);
-      if (options.warmup > 0) await new Promise((resolve) => setTimeout(resolve, options.warmup * 1000));
+    if (!o.listPresets) {
+      if (await exists(o.out)) fail(`Output already exists: ${o.out}`);
+      await mkdir(dirname(o.out),{recursive:true});
+      const reservation=o.out+'.bake-lock'; await mkdir(reservation); lock=reservation;
+      if (await exists(o.out)) fail(`Output already exists: ${o.out}`);
+      stage=await mkdtemp(join(dirname(o.out),`.${basename(o.out)}-baking-`));
     }
-
-    await mkdir(options.out, { recursive: true });
-    const frames = Math.max(1, Math.round(options.seconds * options.fps));
-    const extension = options.format === 'jpeg' ? 'jpg' : options.format;
-    const quality = options.quality;
-    const names = [];
-    const started = Date.now();
-    for (let frame = 0; frame < frames; frame++) {
-      const data = options.preset
-        ? await cdp.evaluate(`__bake.render(${1000 / options.fps})`)
-        : await cdp.evaluate(`document.querySelector(${JSON.stringify(options.canvas)}).toDataURL(${JSON.stringify(MIME[options.format])}, ${quality})`);
-      const base64 = data.slice(data.indexOf(',') + 1);
-      const name = `f${String(frame).padStart(5, '0')}.${extension}`;
-      await writeFile(join(options.out, name), Buffer.from(base64, 'base64'));
-      names.push(name);
-      if (!options.preset) {
-        const targetTime = started + ((frame + 1) * 1000) / options.fps;
-        const wait = targetTime - Date.now();
-        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    if (o.effectOptionsFile) {
+      o.effectOptions=JSON.parse(await readFile(o.effectOptionsFile,'utf8'));
+      if (!o.effectOptions || Array.isArray(o.effectOptions) || typeof o.effectOptions!=='object') fail('Effect options must be an object');
+      for (const [key,value] of Object.entries(o.effectOptions)) {
+        if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(key) || ['el','THREE','texturePath'].includes(key)
+            || !(typeof value==='boolean' || (typeof value==='number' && Number.isFinite(value))
+                 || (typeof value==='string' && /^#[0-9a-fA-F]{6}$/.test(value))))
+          fail(`Unsupported effect option: ${key}`);
       }
-      if ((frame + 1) % options.fps === 0) process.stderr.write(`\r${frame + 1}/${frames}`);
     }
-    process.stderr.write('\n');
-    const manifest = {
-      version: 1,
-      width: options.width,
-      height: options.height,
-      frame_rate: options.fps,
-      frames: names,
-      ...(options.source ? { source: options.source } : {}),
-      ...(options.license ? { license: options.license } : {}),
-    };
-    await writeFile(join(options.out, options.manifest), JSON.stringify(manifest, null, 1) + '\n');
-    console.log(`baked ${frames} frames to ${options.out} (${options.width}x${options.height} at ${options.fps} fps)`);
+    if (!o.url) {
+      o.license=[o.license,await upstreamNotices(o)].filter(Boolean).join('\n\n');
+      o.source ??= o.effect ? `Vanta ${o.effect} — Teng Bao (vanta 0.5.24)` : `${o.preset} — butterchurn-presets`;
+      server=await serve(o);
+    }
+    target=await (await request('/json/new?about:blank',{method:'PUT'})).json();
+    socket=new WebSocket(target.webSocketDebuggerUrl);
+    const opened=new Promise((resolve,reject)=>{
+      socket.addEventListener('open',resolve,{once:true});
+      socket.addEventListener('error',()=>reject(new Error('CDP connection failed')),{once:true});
+      socket.addEventListener('close',()=>reject(new Error('CDP connection closed')),{once:true});
+    });
+    await Promise.race([opened,delay(o.requestTimeout*1000,null,{signal}).then(()=>fail('CDP connection timeout'))]);
+    cdp=new Cdp(socket,signal,o.requestTimeout*1000);
+    await cdp.send('Runtime.enable'); await cdp.send('Page.enable');
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width:o.width,height:o.height,deviceScaleFactor:1,mobile:false});
+    const navigation=await cdp.send('Page.navigate',{url:o.url || `http://127.0.0.1:${server.address().port}/harness.html`});
+    if (navigation.errorText) fail(navigation.errorText);
+    const until=Date.now()+o.requestTimeout*1000;
+    const ready=o.url ? `!!document.querySelector(${JSON.stringify(o.canvas)})` : 'typeof __bake === "object" && typeof __bake.start === "function"';
+    while (!await cdp.evaluate(ready)) {
+      if (Date.now()>until) fail('Canvas page did not become ready');
+      await delay(50,null,{signal});
+    }
+    if (o.listPresets) { console.log((await cdp.evaluate('__bake.names()')).join('\n')); return; }
+    if (!o.url) {
+      await cdp.evaluate(`__bake.start(${JSON.stringify(o)})`);
+      const status=await cdp.evaluate('__bake.error || (__bake.ready ? "ready" : "not ready")');
+      if (status !== 'ready') fail(status);
+      for (let i=0,n=Math.round(o.warmup*o.fps);i<n;i++) {
+        await cdp.evaluate(`__bake.advance(${1000/o.fps})`);
+        if (i%o.fps===0) console.error(`warmup ${i}/${n}`);
+      }
+    } else if (o.warmup) await delay(o.warmup*1000,null,{signal});
+    await cdp.evaluate(captureHarness(o));
+    const names=[], extension=o.format==='jpeg'?'jpg':o.format, started=Date.now();
+    let bytesWritten=0;
+    for (let frame=0;frame<o.frameCount;frame++) {
+      const blendIndex=frame-(o.frameCount-o.loopFrames);
+      // WebGL drawing buffers may be cleared as soon as a task yields.
+      // Advance and capture in one browser task, not two CDP round trips.
+      const capture=`__capture(${frame<o.loopFrames},${blendIndex},${blendIndex>=0?(blendIndex+1)/o.loopFrames:0})`;
+      const data=await cdp.evaluate(o.url ? capture : `(__bake.advance(${1000/o.fps}), ${capture})`);
+      const bytes=encodedImage(data,o.mime);
+      if (frame>=o.loopFrames) {
+        bytesWritten+=bytes.length;
+        if (bytesWritten>o.maxBytes) fail('Bundle exceeds --max-bytes');
+        const name=`f${String(names.length).padStart(5,'0')}.${extension}`;
+        await writeFile(join(stage,name),bytes,{flag:'wx'}); names.push(name);
+      }
+      if (o.url) {
+        const wait=started+(frame+1)*1000/o.fps-Date.now();
+        if (wait>0) await delay(wait,null,{signal});
+      }
+      if ((frame+1)%o.fps===0) console.error(`frames ${frame+1}/${o.frameCount}`);
+    }
+    const manifest={version:1,width:o.width,height:o.height,frame_rate:o.fps,frames:names,
+      source:o.source || o.url,license:o.license || 'Unspecified; verify source rights before sharing',
+      bake:{renderer:o.effect?'vanta':o.preset?'butterchurn':'url',work:o.effect || o.preset || o.url,
+        seed:o.url?null:o.seed,warmup:o.warmup,loop_crossfade:o.loop,source_seconds:o.seconds}};
+    const text=JSON.stringify(manifest,null,1)+'\n';
+    if (bytesWritten+Buffer.byteLength(text)>o.maxBytes) fail('Bundle exceeds --max-bytes');
+    await writeFile(join(stage,o.manifest),text,{flag:'wx'});
+    signal.throwIfAborted();
+    if (await exists(o.out)) fail(`Output already exists: ${o.out}`);
+    await rename(stage,o.out); stage=null;
+    console.log(`baked ${names.length} frames to ${o.out} (${o.width}x${o.height} at ${o.fps} fps; ${bytesWritten} image bytes)`);
   } finally {
-    try { await fetch(`http://127.0.0.1:${options.cdpPort}/json/close/${target.id}`); } catch { /* tab is gone */ }
-    socket.close();
-    if (server) server.close();
+    clearTimeout(timer); controller.abort(new Error('Baking finished'));
+    process.removeListener('SIGINT',onSignal); process.removeListener('SIGTERM',onSignal);
+    cdp?.close(); if (!cdp) socket?.close();
+    if (target?.id) {
+      try {
+        const response=await fetch(`${endpoint}/json/close/${encodeURIComponent(target.id)}`,{signal:AbortSignal.timeout(2000)});
+        if (!response.ok) console.error(`cleanup: could not close owned tab ${target.id}`);
+      } catch { console.error(`cleanup: could not reach owned tab ${target.id}`); }
+    }
+    if (server) { server.closeAllConnections(); server.close(); }
+    if (stage) await rm(stage,{recursive:true,force:true});
+    if (lock) await rm(lock,{recursive:true,force:true});
   }
 }
 
-main().catch((error) => {
-  console.error('bake failed: ' + error.message);
-  process.exitCode = 1;
-});
+const args=process.argv.slice(2);
+if (!args.length || args.includes('--help') || args[0]==='help') console.log(HELP);
+else {
+  let options;
+  try { options=parse(args); }
+  catch (error) { console.error(`bake usage: ${error.message}\nUse help for options.`); process.exitCode=2; }
+  if (options) await bake(options).catch(error=>{ console.error('bake failed: '+error.message); process.exitCode=1; });
+}

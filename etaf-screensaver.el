@@ -120,7 +120,11 @@
 ;; recording).  Re-registering an ID replaces it in place.  The built-in
 ;; `tte' provider reads Terminal Text Effects recordings and the `frames'
 ;; provider reads baked image-frame manifests, both without running any
-;; tool.
+;; tool. Image manifests are bounded to 1 MiB, 7200 local frame basenames,
+;; 1–120 fps, dimensions up to 2048 per axis and 2073600 declared pixels.
+;; Encoded images are bounded to 16 MiB each and 1 GiB total; paths and
+;; symlinks may not escape the bundle. Import trusted images: these bounds
+;; do not sandbox Emacs's image decoder.
 ;;
 ;; Function: etaf-screensaver-register-reel (spec)
 ;;;###autoload (autoload 'etaf-screensaver-register-reel "etaf-screensaver" nil nil)

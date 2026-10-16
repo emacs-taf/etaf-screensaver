@@ -190,8 +190,9 @@ Consecutive mosaic selections form pages of at most four works without
 crossing pack boundaries. A partial page never repeats a work to fill empty
 slots. Explicit repetitions in a program, or random sampling with replacement,
 can still select the same work more than once. The page stays for its longest
-work's duration; shorter recordings loop at native speed. This does not make
-a recording's end-to-start seam seamless. `:count` counts selected works before
+work's duration; shorter recordings loop at native speed. Raw recordings can
+have an end-to-start seam; the image baker's `--loop` option crossfades that
+seam offline. `:count` counts selected works before
 pagination, while status `:index` counts pages. `:works` and `:up-next-works`
 report the actual concurrent selections.
 
@@ -503,10 +504,10 @@ to keep the moving part plus a short hold and drop the rest, then import the
 trimmed file.  A trimmed work loops its motion instead of freezing, and a
 reel that knows its frame count registers that length as its natural
 duration so a program plays it once before moving on.
-`lisp/reels` ships three recordings produced with Terminal Text Effects 0.15.0
-(commit 6dbc34a0, MIT) from the text `ETAF`: the beams, synthgrid and
-thunderstorm effects, which is why the default program includes `tte-beams`,
-`tte-synthgrid` and `tte-thunderstorm`. The MIT license covers the TTE tool
+`lisp/reels` ships fourteen recordings produced with Terminal Text Effects
+from the text `ETAF`, grouped by the bundled neon, space, ink and ember
+packs. These are short typographic effects; the optional moving gallery
+below supplies sustained canvas artwork. The MIT license covers the TTE tool
 and these bundled recordings' generation; verify the rights of your own input
 text before publishing a recording.
 
@@ -555,10 +556,15 @@ node scripts/bake-canvas-frames.mjs \
   --source "MilkDrop preset via butterchurn" --license "butterchurn-presets MIT"
 ```
 
-Preset baking uses virtual time and a deterministic synthetic audio signal,
-so it is reproducible and runs as fast as the GPU renders. `--url URL
-[--canvas SELECTOR]` captures any page's canvas in real time instead
-(p5 sketches, shader previews). Import the result like any recording:
+Preset and Vanta effect baking use a seeded random stream and virtual time,
+including every warmup frame. They run as fast as the renderer can produce
+frames; browser/GPU changes need not be bit-identical. `--packs` selects the
+upstream Butterchurn packs (base, extra and extra2 by default). `--effect`
+selects an upstream Vanta renderer; `--effect-options` accepts its numeric,
+boolean and hex-color options as a JSON file. `--url URL [--canvas SELECTOR]`
+captures a page in real time instead; arbitrary pages are not deterministic.
+The canvas's actual dimensions and encoded MIME must match the requested
+bundle. Import the result like any recording:
 
 ```elisp
 (etaf-screensaver-import-recording "/tmp/royal/royal.frames.json")
@@ -574,6 +580,72 @@ count modest (for example 960×540 at 12–15 fps for 10 seconds), choose
 Each frame is scaled to fit the canvas and centered; resizing the window
 rescales it, and the engine releases the previous frame from Emacs's image
 cache as the next one is published.
+
+The baker never overwrites an existing output. It builds in a sibling staging
+directory, then renames on success. An error, interrupted socket, signal or
+expired deadline closes only its own tab and removes staging. `--timeout`
+bounds the whole operation; `--request-timeout` bounds each browser request.
+Frames and canvas pixels are bounded, and `--max-bytes` limits encoded output.
+Run `help` for exact defaults and limits. A failed collection build reports
+failed work ids and retains completed independent bundles, but writes no
+`gallery.el` success configuration.
+
+A `frames` manifest is at most 1 MiB. Its declared dimensions are 1–2048 pixels
+per axis and at most 2,073,600 pixels, its rate is 1–120 fps, and it lists
+1–7200 frame basenames. Absolute paths, directory traversal and symlinks
+escaping the bundle are rejected. Each encoded image is at most 16 MiB and
+the total is at most 1 GiB. Validation precedes import writes. These are
+resource bounds, not a sandbox for an image decoder: only import trusted art.
+
+### Curated moving gallery
+
+`scripts/gallery.json` is a rebuildable collection recipe, not downloaded
+images: 24 works in four packs. Six light works use different Vanta renderers
+(clouds, fog, waves, birds, a network and a point field); the remaining packs
+combine kinetic geometry and selected MilkDrop works. Titles, source authors,
+pack membership, renderer settings and baking defaults live in that recipe.
+It does not turn background-color variants into separate works.
+
+Install the pinned offline renderers outside the checkout, start Chrome with
+a local CDP endpoint, then build directly into persistent user storage:
+
+```sh
+npm install --prefix "$HOME/.cache/etaf-screensaver-renderers" \
+  butterchurn@2.6.7 butterchurn-presets@2.4.7 vanta@0.5.24 three@0.134.0
+node scripts/bake-gallery.mjs \
+  --modules "$HOME/.cache/etaf-screensaver-renderers/node_modules" \
+  --out "$HOME/.emacs.d/etaf-screensaver/scenes/gallery"
+```
+
+`--list` shows the works; `--only ID,ID` builds a subset. Smaller `--width`,
+`--height` and `--seconds` overrides make review copies in a separate output
+directory. Upstream MIT notices and the original MilkDrop preset names travel
+inside each manifest. Renderers are build-time dependencies only; neither
+Node, Chrome nor an external decoder is used while the screen plays.
+
+```elisp
+(load (locate-user-emacs-file "etaf-screensaver/scenes/gallery/gallery.el"))
+(setq etaf-screensaver-program
+      '(:order sequential
+        :scenes ((:pack gallery-daylight) (:pack gallery-sculpture)
+                 (:pack gallery-currents) (:pack gallery-nocturne))))
+;; Optional independent override; nil keeps each pack's suggested layout.
+(setq etaf-screensaver-presentation nil)
+```
+
+Loading `gallery.el` adds its scene directory and pack definitions and loads
+its `.esr` specs. It does not enable idle mode or replace the user's program.
+Use `etaf-screensaver-start` for a preview or enable automatic mode separately.
+To remove the collection, remove the load form and its program references
+before deleting the generated directory. It is reproducible user content,
+not part of the source checkout.
+
+The default bake records 26 seconds at 15 fps and crossfades its last two
+seconds into its first two. It omits those leading two seconds, producing a
+24-second moving loop whose last and first frames are neighboring motion.
+This smooths a reel's loop, not transitions between different works. Baked
+files still require visual review for motion, exposure, flash and the seam;
+a completed bake is not a quality certification.
 
 ## Code scenes
 

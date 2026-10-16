@@ -72,8 +72,38 @@ neighboring tile borders therefore stay aligned without stretching the image. Th
 after the next one is committed and flushes remaining images on teardown.
 Thus long playback retains only the currently displayed page's decoded frames.
 Baking is a development step (`scripts/bake-canvas-frames.mjs`): it renders
-a browser canvas offline and writes still frames. The application never runs
-a browser, shader or decoder at playback.
+a browser canvas offline and writes still frames. Renderer adapters use
+upstream Butterchurn and Vanta, a virtual clock and a seeded RNG; external
+URL canvases instead use real time. The baker owns one CDP tab and a staging
+directory, bounds requests and output, validates canvas dimensions/MIME and
+commits by rename. Loop crossfades happen there, not on the Emacs input path.
+`scripts/bake-gallery.mjs` applies the data recipe, delegates each work to the
+baker and generates public `.esr` specs and independent pack configuration.
+The image provider rejects paths leaving the bundle and bounds manifest,
+canvas, frame count and encoded size before import. It is not a decoder
+sandbox. The application never runs a browser, shader or external decoder at
+playback.
+
+### Offline baking protocol (version 1)
+
+The CLI uses a local Chrome CDP HTTP endpoint: `PUT /json/new?about:blank`
+allocates its one owned target; the returned WebSocket carries numbered
+`Runtime.enable`, `Page.enable`, `Emulation.setDeviceMetricsOverride`,
+`Page.navigate` and `Runtime.evaluate` requests. Replies resolve by id;
+protocol errors, exception events, console errors, socket loss and deadlines
+fail the operation. Cleanup uses `/json/close/<owned-id>` and never closes
+another target. The bounded fixture peer in `tests/tools` speaks these same
+HTTP/WebSocket envelopes, including failure paths, without a browser or
+network service. Actual upstream renderers require a separate real bake.
+
+A renderer adapter exposes names, start and per-frame advance inside the
+owned page. Capture validates its canvas and MIME; advance/capture share one
+browser task so WebGL cannot clear the drawing buffer between them. The
+output contract is a version-1 frame manifest plus basename-only stills.
+Upstream attribution is metadata, never executable scene configuration.
+A collection recipe contains defaults, works and pack data; its runner only
+composes the baker and public reel/pack formats. It cannot change the playback
+program, start Emacs, or run a renderer during presentation.
 
 ## Presentation lifecycle
 

@@ -75,6 +75,13 @@ cream page) and ember (warm particles and falling sand). Every selected pack's
 works are included. Recordings use their natural duration; a mosaic page holds
 until its longest work ends, looping shorter works. Dismissal remembers the
 current work/page, not an exact frame within it.
+An optional [moving gallery](docs/manual.md#curated-moving-gallery) provides a
+rebuildable recipe for 24 distinct works, including six light compositions.
+It combines Vanta geometry/nature effects with selected MilkDrop presets,
+bakes loop crossfades and preserves attribution. Generate it once in user
+storage; playback needs no browser. Content, layout and ordering remain
+independent choices.
+
 See the [manual](docs/manual.md) for program composition, style packs,
 durations, frame-rate caps, repeatable seeds, custom scene files,
 recorded-animation import and callback authoring. Recordings can be text
@@ -86,8 +93,9 @@ The [entry Commentary](etaf-screensaver.el) is the supported API inventory.
 ## Development
 
 ```sh
-make check          # structure, compilation, public acceptance and API bindings
+make check          # structure, compilation, public APIs and offline CLI contracts
 make gui SERVER=... # maintained scenario in an owned graphical Emacs server
+make gui-gallery SERVER=... # review the installed gallery and viewport matrix
 ```
 
 The GUI scenario covers scene rendering, all four presentations across wide,

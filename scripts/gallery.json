@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "defaults": {"width": 960, "height": 540, "fps": 15, "seconds": 26, "warmup": 8, "loop": 2, "format": "jpeg", "quality": 0.86, "seed": 4242},
+  "packs": [
+    {"id": "daylight", "title": "天光", "theme": "light", "presentation": "card", "background": "#F3F5F3"},
+    {"id": "sculpture", "title": "几何雕塑", "theme": "dark", "presentation": "mosaic", "background": "#0C101B"},
+    {"id": "currents", "title": "流体与色域", "theme": "dark", "presentation": "full", "background": "#05070D"},
+    {"id": "nocturne", "title": "夜航", "theme": "dark", "presentation": "band", "background": "#03060C"}
+  ],
+  "works": [
+    {"id": "porcelain-mist", "title": "瓷青云雾", "pack": "daylight", "effect": "fog", "options": {"highlightColor": "#FFFFFF", "midtoneColor": "#AACED3", "lowlightColor": "#517F9A", "baseColor": "#F2ECE2", "blurFactor": 0.65, "speed": 0.7, "zoom": 0.8}},
+    {"id": "cloud-atlas", "title": "云的地图", "pack": "daylight", "effect": "clouds", "options": {"skyColor": "#89C7E4", "cloudColor": "#9CAFC8", "cloudShadowColor": "#243B53", "sunColor": "#D68E55", "sunGlareColor": "#C67F59", "sunlightColor": "#CC995C", "speed": 0.55}},
+    {"id": "tidal-silver", "title": "银色潮汐", "pack": "daylight", "effect": "waves", "options": {"color": "#527884", "shininess": 28, "waveHeight": 12, "waveSpeed": 0.55, "zoom": 0.85}},
+    {"id": "paper-flock", "title": "纸翼迁徙", "pack": "daylight", "effect": "birds", "options": {"backgroundColor": "#F4F1E9", "color1": "#274E66", "color2": "#B87A5F", "birdSize": 1.2, "wingSpan": 36, "speedLimit": 3, "quantity": 4}},
+    {"id": "blueprint", "title": "蓝图生长", "pack": "daylight", "effect": "net", "options": {"backgroundColor": "#F2F4F0", "color": "#437F99", "points": 9, "maxDistance": 21, "spacing": 17, "showDots": true}},
+    {"id": "kinetic-dots", "title": "点阵地形", "pack": "daylight", "effect": "dots", "options": {"backgroundColor": "#F4F0E7", "color": "#356880", "color2": "#A36E56", "size": 4, "spacing": 24, "showLines": false}},
+    {"id": "orbital-mobile", "title": "轨道悬雕", "pack": "sculpture", "effect": "rings", "options": {"backgroundColor": "#0C1323", "color": "#70D8DD"}},
+    {"id": "living-cells", "title": "微观群落", "pack": "sculpture", "effect": "cells", "options": {"color1": "#102C4C", "color2": "#81DBC7", "size": 1.3, "speed": 0.6}},
+    {"id": "luminous-halo", "title": "光环呼吸", "pack": "sculpture", "effect": "halo", "options": {"backgroundColor": "#0B1024", "baseColor": "#367C9B", "color2": "#DCC599", "size": 1.25, "speed": 0.6}},
+    {"id": "glass-corridor", "title": "玻璃长廊", "pack": "sculpture", "preset": "martin - glass corridor"},
+    {"id": "mandala", "title": "曼陀罗之门", "pack": "sculpture", "preset": "Cope - Passage (mandala mix)"},
+    {"id": "myriad-mosaics", "title": "万象拼图", "pack": "sculpture", "preset": "Geiss - Myriad Mosaics"},
+    {"id": "royal-flow", "title": "丝绸流光", "pack": "currents", "preset": "$$$ Royal - Mashup (197)"},
+    {"id": "painterly", "title": "画笔潮涌", "pack": "currents", "preset": "Flexi, martin + geiss - painterly rogue wave strike"},
+    {"id": "tendrils", "title": "彩色枝蔓", "pack": "currents", "preset": "Aderrasi + Geiss - Airhandler (Kali Mix) - Painterly Tendrils Colorfast"},
+    {"id": "alien-pond", "title": "异星水庭", "pack": "currents", "preset": "Flexi - alien fish pond"},
+    {"id": "desert-rose", "title": "沙漠玫瑰", "pack": "currents", "preset": "Geiss - Desert Rose 4"},
+    {"id": "spiral-oil", "title": "螺旋油彩", "pack": "currents", "preset": "Flexi - infused with the spiral"},
+    {"id": "astral", "title": "星体投影", "pack": "nocturne", "preset": "Flexi + Martin - astral projection"},
+    {"id": "reaction-relief", "title": "生长浮雕", "pack": "nocturne", "preset": "Geiss - Reaction Diffusion (Relief Mix)"},
+    {"id": "spirits", "title": "幽光之泉", "pack": "nocturne", "preset": "Aderrasi - Potion of Spirits"},
+    {"id": "sunset-river", "title": "落日长河", "pack": "nocturne", "preset": "martin - sunset over the river"},
+    {"id": "stained-glass", "title": "彩窗天光", "pack": "nocturne", "preset": "Eo.S. + Zylot - skylight (Stained Glass Majesty mix)"},
+    {"id": "tunnel", "title": "无尽回廊", "pack": "nocturne", "preset": "Geiss - 3 layers (Tunnel Mix)"}
+  ]
+}

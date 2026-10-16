@@ -40,6 +40,7 @@
     {"name": "etaf-screensaver-reel-tests-natural-duration", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A reel with a recorded length uses it as the scene duration instead of the default."},
     {"name": "etaf-screensaver-reel-tests-image-frames-advance", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Baked image frames publish display slices that advance in order."},
     {"name": "etaf-screensaver-reel-tests-imports-frame-bundle", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Importing a frame bundle copies every file, writes the reel spec and plays it."},
+    {"name": "etaf-screensaver-reel-tests-bounded-frame-import", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Escaping paths, symlinks and oversized manifests/declarations fail before writing an image bundle import."},
     {"name": "etaf-screensaver-reel-tests-rejects-broken-frame-bundles", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Missing frames, non-images and bad JSON signal and write nothing."}
   ]
 }

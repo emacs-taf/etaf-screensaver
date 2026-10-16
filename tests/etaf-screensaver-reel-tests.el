@@ -341,6 +341,40 @@
             (should-not (file-exists-p target)))
         (delete-directory directory t)))))
 
+(ert-deftest etaf-screensaver-reel-tests-bounded-frame-import ()
+  "Escaping paths and oversized declarations fail before writing imports."
+  (etaf-screensaver-reel-tests--clean
+    (let* ((directory (make-temp-file "frames-bounds-" t))
+           (bundle (expand-file-name "bundle" directory))
+           (target (expand-file-name "imported" directory))
+           (manifest (expand-file-name "test.frames.json" bundle))
+           (outside (expand-file-name "outside.png" directory)))
+      (unwind-protect
+          (progn
+            (make-directory bundle)
+            (copy-file (etaf-screensaver-reel-tests--fixture "frames/frame-a.png") outside)
+            (copy-file outside (expand-file-name "frame.png" bundle))
+            (make-symbolic-link outside (expand-file-name "escape.png" bundle))
+            (dolist (overrides
+                     (list '(:width 2049) '(:height 2049)
+                           '(:width 2048 :height 2048) '(:frame_rate 121)
+                           '(:frames ["../outside.png"]) '(:frames ["..\\outside.png"])
+                           (list :frames (vector outside)) '(:frames ["escape.png"])
+                           (list :frames (make-vector 7201 "frame.png"))))
+              (let ((data (list :version 1 :width 40 :height 20
+                                :frame_rate 10 :frames ["frame.png"])))
+                (while overrides
+                  (setq data (plist-put data (pop overrides) (pop overrides))))
+                (with-temp-file manifest (insert (json-encode data))))
+              (should-error (etaf-screensaver-import-recording manifest target)
+                            :type 'etaf-screensaver-error)
+              (should-not (file-exists-p target)))
+            (with-temp-file manifest (insert (make-string (1+ (* 1024 1024)) ?x)))
+            (should-error (etaf-screensaver-import-recording manifest target)
+                          :type 'etaf-screensaver-error)
+            (should-not (file-exists-p target)))
+        (delete-directory directory t)))))
+
 (ert-deftest etaf-screensaver-reel-tests-natural-duration ()
   "A reel with frame count and rate registers its full length as duration."
   (skip-unless (and (display-graphic-p) (image-type-available-p 'png)))
