@@ -164,11 +164,19 @@ background preview must not mistake an unchanged nil focus for a loss."
   "Schedule OWNER's next frame only while it still owns the presentation."
   (when (eq owner etaf-screensaver--active)
     (let* ((session (etaf-screensaver--presentation-session owner))
-           (rate (plist-get (etaf-screensaver--session-item session) :frame-rate)))
+           (item (etaf-screensaver--session-item session))
+           (rate (plist-get item :frame-rate))
+           (deadline (etaf-screensaver--presentation-deadline owner))
+           (origin (- deadline (plist-get item :duration)))
+           (now (float-time))
+           ;; Anchor cadence to the page clock, not each late callback.  The
+           ;; latter accumulates timer jitter and shifts the last outgoing
+           ;; frame relative to the natural page boundary.  Missed grid slots
+           ;; are skipped; never queue a burst of expired frame callbacks.
+           (slot (1+ (floor (* rate (max 0 (- now origin))))))
+           (due (min deadline (+ origin (/ slot (float rate))))))
       (setf (etaf-screensaver--presentation-timer owner)
-            (run-at-time (max 0.001 (- (+ (etaf-screensaver--presentation-last-time owner)
-                                          (/ 1.0 rate))
-                                       (float-time)))
+            (run-at-time (max 0.001 (- due now))
                          nil #'etaf-screensaver--tick owner)))))
 
 (defun etaf-screensaver--tick (owner)

@@ -148,8 +148,10 @@ by visible rows, and ordinary wake/teardown releases the transition too.
 
 One single-shot animation timer advances every work's elapsed time, selects
 the next page when its duration expires and publishes the composed frame.
-Scheduling subtracts time already spent rendering from the next frame interval;
-missed deadlines skip waiting rather than replaying a burst of old ticks.
+Scheduling uses an absolute frame grid anchored to the current page's clock,
+with the natural page deadline as its final slot. Rendering time and timer
+jitter do not accumulate into a shifting cadence. Missed grid slots are
+skipped rather than replayed as a burst of old ticks.
 A mosaic page lasts for its longest work; recorded children follow their own
 timing and loop independently. It schedules a successor only
 if it still owns the active presentation. Scene boundaries and resize update

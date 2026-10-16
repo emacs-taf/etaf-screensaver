@@ -59,6 +59,10 @@
 
 ### Fixed
 
+- Frame cadence stays aligned to each page's clock instead of accumulating
+  timer delay; late frames skip expired slots and natural page deadlines stay
+  independent of the outgoing frame's timing.
+
 - Gallery playback avoids repeated image-width measurement while preserving
   frame size, letterboxing, clipping and aligned mosaic borders.
 
