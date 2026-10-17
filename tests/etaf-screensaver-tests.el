@@ -187,8 +187,8 @@
     (dolist (scene '(banner donut falling-sand life matrix plasma quotes snow starfield
                           tte-beams tte-synthgrid tte-thunderstorm tte-decrypt
                           tte-fireworks tte-bubbles tte-unstable tte-blackhole
-                          tte-rain tte-vhstape tte-burn tte-ink-waves
-                          tte-ink-spotlights tte-ink-print))
+                          tte-rain tte-vhstape tte-burn tte-ink-snow-mud
+                          tte-ink-rain tte-ink-river))
       (ert-info ((format "Scene: %s" scene))
         (let ((buffer (etaf-screensaver-start scene)))
           (let ((deadline (+ (float-time) 1)))

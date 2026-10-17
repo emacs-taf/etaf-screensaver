@@ -38,7 +38,7 @@
                                 (etaf-screensaver-start
                                  (if (eq style 'mosaic)
                                      '(:pack neon :presentation mosaic :duration 60)
-                                   (list :scene (if (eq style 'card) 'tte-ink-waves 'tte-thunderstorm)
+                                   (list :scene (if (eq style 'card) 'tte-ink-river 'tte-thunderstorm)
                                          :presentation style :duration 60)))))
                         (lambda (_context)
                           (let ((status (etaf-screensaver-status)))
@@ -57,7 +57,7 @@
          (setf (etaf-gui-verifier-context-target-buffer context)
                (etaf-screensaver-start
                 (list :presentation style :scenes
-                      '(frames-sample tte-ink-waves tte-synthgrid starfield)))))
+                      '(frames-sample tte-ink-river tte-synthgrid starfield)))))
        (lambda (_context)
          (let ((status (etaf-screensaver-status)))
            (and (eq (plist-get status :presentation) style)
@@ -70,7 +70,7 @@
        (etaf-screensaver-stop)
        (setf (etaf-gui-verifier-context-target-buffer context)
              (etaf-screensaver-start
-              '(:scenes ((:scene tte-ink-waves :presentation card)
+              '(:scenes ((:scene tte-ink-river :presentation card)
                          (:scene starfield :presentation band)
                          (:presentation mosaic :scenes
                           (tte-beams tte-synthgrid tte-bubbles tte-thunderstorm)))))))
@@ -83,7 +83,7 @@
        (setf (etaf-gui-verifier-context-target-buffer context)
              (etaf-screensaver-start
               '(:scenes ((:scene tte-beams :presentation full)
-                         (:scene tte-ink-waves :presentation card))))))
+                         (:scene tte-ink-river :presentation card))))))
      (lambda (_context)
        (let ((status (etaf-screensaver-status)))
          (unless (plist-get status :active)

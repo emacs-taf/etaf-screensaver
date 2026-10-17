@@ -22,7 +22,7 @@
                       '(:presentation mosaic :scenes
                         ((:scene tte-beams :duration 3600 :frame-rate 30)
                          (:scene tte-synthgrid :duration 3600)
-                         (:scene tte-ink-waves :duration 3600)
+                         (:scene tte-ink-river :duration 3600)
                          (:scene benchmark-large :duration 3600)))
                     (list :scene scene :duration 3600 :frame-rate 30
                           :presentation (or presentation 'full)))))

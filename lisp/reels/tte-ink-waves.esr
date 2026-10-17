@@ -1,2 +1,0 @@
-;;; -*- lisp-data -*-
-(:id tte-ink-waves :title "Terminal Text Effects: waves" :summary "waves (Terminal Text Effects) text recording, 80×24, 488 frames at 20 fps, MIT license" :tags (imported) :provider tte :recording "ink-waves.tterec" :kind text :width 80 :height 24 :frame-rate 20 :frame-count 488 :source "waves" :license "MIT" :background "#F4F1EA")

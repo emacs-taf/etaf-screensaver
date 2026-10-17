@@ -156,7 +156,7 @@ strategy is configurable without touching the scenes:
       '(:order sequential :scenes ((:pack neon :count 6) (:pack ink :count 4))))
 
 ;; A single work on loop; the root repeats whatever it is given.
-(setq etaf-screensaver-program '(:scene tte-ink-waves))
+(setq etaf-screensaver-program '(:scene tte-ink-river))
 
 ;; Two packs in a shuffled bag, then the ember pack.
 (setq etaf-screensaver-program
@@ -547,9 +547,11 @@ to keep the moving part plus a short hold and drop the rest, then import the
 trimmed file.  A trimmed work loops its motion instead of freezing, and a
 reel that knows its frame count registers that length as its natural
 duration so a program plays it once before moving on.
-`lisp/reels` ships fourteen recordings produced with Terminal Text Effects
-from the text `ETAF`, grouped by the bundled neon, space, ink and ember
-packs. These are short typographic effects; the optional moving gallery
+`lisp/reels` ships fourteen recordings produced with Terminal Text Effects,
+grouped by the bundled neon, space, ink and ember packs. The light `ink` reels
+carry Su Shi lines (雪泥鸿爪、一蓑烟雨、江海余生) type-set one character at a
+time in a single ink color, so a paper page reads as a page rather than a
+color show. These are short typographic effects; the optional moving gallery
 below supplies sustained canvas artwork. The MIT license covers the TTE tool
 and these bundled recordings' generation; verify the rights of your own input
 text before publishing a recording.

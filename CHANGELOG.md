@@ -41,6 +41,11 @@
 
 ### Changed
 
+- The light `ink` reels now carry Su Shi lines — 《和子由渑池怀旧》「人生到处知何似
+  应似飞鸿踏雪泥」, 《定风波》「一蓑烟雨任平生」 and 《临江仙》「小舟从此逝
+  江海寄余生」 — type-set one character at a time in a single ink color, without
+  color gradients, with matching titles and summaries.
+
 - Single-work recorded text subjects grow to a readable size in graphical SVG builds,
   without changing the caption font, recording timing or surrounding effects.
   `etaf-screensaver-reel-text-scale` selects automatic sizing or a fixed 1–12

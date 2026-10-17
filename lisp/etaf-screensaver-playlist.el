@@ -176,7 +176,7 @@ Changes take effect at the next start.  Invalid options fail before takeover."
     (ink :title "文墨"
          :summary "米色纸面、深墨字与光影"
          :theme light :order sequential :background "#F4F1EA" :presentation card
-         :scenes (tte-ink-spotlights tte-ink-waves tte-ink-print))
+         :scenes (tte-ink-snow-mud tte-ink-rain tte-ink-river))
     (ember :title "余烬"
            :summary "暖色粒子与缓缓落下的沙火"
            :theme dark :order sequential :background "#0A0503" :presentation mosaic
