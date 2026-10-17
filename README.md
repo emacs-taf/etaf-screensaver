@@ -44,8 +44,9 @@ Keep the same works and choose how they appear:
       etaf-screensaver-presentation 'card)
 ```
 
-`full` fills the canvas, `card` adds a window-filling thin frame and lower-left
-title/description, `band` adds a cinema strip and clock, and `mosaic` plays up
+`full` fills the canvas, `card` adds a thin frame inset by an even mat of about
+three line heights with lower-left title/description, `band` adds a cinema strip
+and clock, and `mosaic` plays up
 to four independent works concurrently. Images keep their native dimensions
 unless the window requires proportional downscaling; they never stretch or enlarge.
 In graphical SVG builds, single-work recorded text subjects adapt to the viewport

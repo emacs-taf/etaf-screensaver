@@ -23,8 +23,11 @@ callback sizing and composition; a wall is not a sliced single-scene frame.
 Only the parent owns a mounted Runtime. Color-only changes are meaningful:
 publication compares text properties as well as characters. Full-canvas works
 inherit the Host background directly. Gallery cards extend the work's paper
-across the viewport, with a thin perimeter and two ordinary lower-left caption
-rows for its title and summary. Framed works use a read-only paper/mat, border
+across the viewport, inset a thin frame by an even mat of about three line
+heights, and reserve two ordinary lower-left caption rows for its title and
+summary. The side mat is derived from the frame's cell metrics so the four
+pixel distances match; compact windows shrink the mat before the work drops
+below four content rows. Framed works use a read-only paper/mat, border
 and caption template, rebuilt only for a new page, viewport or clock minute;
 its rows are split into static fragments and work-row slots. Each animation
 fills those slots with borrowed logical rows and background metadata, without

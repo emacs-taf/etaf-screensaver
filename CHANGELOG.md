@@ -59,10 +59,14 @@
   `etaf-screensaver-reel-text-scale` selects automatic sizing or a fixed 1–12
   scale; 1 keeps the native size, also used without graphical SVG support.
 
-- Gallery cards fill the editing area with a thin frame and ordinary lower-left
-  title/description. Images retain their native size when they fit and only
-  scale down proportionally, avoiding blurred enlargement. Generated gallery
-  scenes retain their own background in both standalone and pack playback.
+- Gallery cards inset their thin frame by an even mat of about three line
+  heights on every side instead of touching the viewport edge. The side mat is
+  derived from the frame's cell metrics so the four distances match on screen;
+  compact windows shrink it before the work drops below four content rows, and
+  the two ordinary lower-left caption rows stay inside the frame. Images retain
+  their native size when they fit and only scale down proportionally, avoiding
+  blurred enlargement. Generated gallery scenes retain their own background in
+  both standalone and pack playback.
 
 - The application is now a canvas-only screensaver. Configure it in Lisp or
   Customize; any key, mouse movement, completed click or wheel input wakes it.

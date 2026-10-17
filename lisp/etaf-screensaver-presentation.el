@@ -81,6 +81,17 @@ from a shortened character span.  Reel image runs reserve their cell footprint."
       (let ((result (apply #'concat (nreverse pieces))))
         (concat result (make-string (max 0 (- width (string-width result))) ?\s)))))))
 
+(defconst etaf-screensaver--card-margin-rows 3
+  "Rows of mat between a card's frame and the window edge.
+The card's side margin is derived from this value and the frame's cell
+metrics, so the four distances match on screen rather than in cells.")
+
+(defun etaf-screensaver--card-margin-columns (rows)
+  "Return the column count whose pixel width matches ROWS line heights."
+  (let ((cell-width (max 1 (frame-char-width)))
+        (line-height (max 1 (frame-char-height))))
+    (max 1 (round (/ (* rows line-height) (float cell-width))))))
+
 (defun etaf-screensaver--presentation-layout (style columns rows &optional count)
   "Return STYLE's layout with COLUMNS, ROWS and COUNT independent works.
 Slots are (X Y WIDTH HEIGHT) content rectangles.  The same slots size the
@@ -91,10 +102,18 @@ callbacks and place their output.  A narrow wall stacks works vertically."
     (pcase style
       ('full (list :width width :height height :slots (list (list 0 0 width height))))
       ('card
-       ;; One continuous work-colored canvas, with two ordinary caption rows
-       ;; at the lower left.  Framing fills the window, not a centered card.
-       (list :width width :height height
-             :slots (list (list 1 1 (- width 2) (- height 4)))))
+       ;; A centered work-colored page, framed by an even mat and two ordinary
+       ;; caption rows at the lower left.  The mat is measured in line heights
+       ;; vertically and in the matching pixel width horizontally; compact
+       ;; windows shrink it before squeezing the work below four rows.
+       (let* ((margin (max 1 (min etaf-screensaver--card-margin-rows
+                                  (floor (- height 8) 2))))
+              (side (max 1 (min (etaf-screensaver--card-margin-columns margin)
+                                (floor (- width 22) 2)))))
+         (list :width width :height height
+               :slots (list (list (1+ side) (1+ margin)
+                                  (- width (* 2 side) 2)
+                                  (- height (* 2 margin) 4))))))
       ('band
        (let* ((h (max 3 (min (- height 5) (round (* height .5)))))
               (y (max 1 (/ (- height (+ h 3)) 2))))

@@ -201,8 +201,9 @@
 ;; Variable: etaf-screensaver-presentation
 ;; Nil uses each pack's suggested style (full for standalone works).  Full,
 ;; card, band or mosaic overrides pack suggestions globally; explicit group
-;; or item :presentation settings take priority.  Card fills the window with a
-;; thin frame on the work's background and ordinary lower-left title/summary.
+;; or item :presentation settings take priority.  Card insets a thin frame by
+;; an even mat of about three line heights, with an ordinary lower-left
+;; title/summary on the work's background.
 ;; Mosaic presents independent
 ;; works concurrently, not crops of one work; narrow windows stack the tiles.
 ;;

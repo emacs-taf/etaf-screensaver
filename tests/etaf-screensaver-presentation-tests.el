@@ -42,6 +42,20 @@
             (split-string (string-remove-suffix "\n" (buffer-substring (point-min) (point-max)))
                           "\n"))))
 
+(defun etaf-screensaver-presentation-tests--display-width (text metrics)
+  "Return TEXT's displayed pixel width using its compact space runs."
+  (let ((index 0) (width 0)
+        (cell (plist-get metrics :char-width)))
+    (while (< index (length text))
+      (let* ((display (get-text-property index 'display text))
+             (space (and (eq (car-safe display) 'space)
+                         (plist-get (cdr display) :width))))
+        (cl-incf width (if (and (listp space) (numberp (car space)))
+                           (car space)
+                         (* (char-width (aref text index)) cell))))
+      (cl-incf index))
+    width))
+
 (ert-deftest etaf-screensaver-presentation-tests-color-only-animation ()
   "A frame changing only face properties must still repaint after its first tick."
   (etaf-screensaver-presentation-tests--clean
@@ -250,8 +264,8 @@
         (should (string-match-p "FIVE 中" text))
         (should-not (string-match-p "ONE 中" text))))))
 
-(ert-deftest etaf-screensaver-presentation-tests-card-fills-canvas ()
-  "The work fills its frame and ordinary captions occupy the lower left."
+(ert-deftest etaf-screensaver-presentation-tests-card-mats-evenly ()
+  "The card frame is inset by an even mat and keeps ordinary captions."
   (etaf-screensaver-presentation-tests--clean
     (set-window-configuration (current-window-configuration))
     (etaf-screensaver-define-scene presentation-gallery-caption
@@ -268,12 +282,42 @@
              (columns (plist-get status :columns))
              (rows (plist-get status :rows))
              (text (etaf-screensaver-presentation-tests--text buffer))
-             (lines (split-string (string-remove-suffix "\n" text) "\n")))
-        (should (equal (car lines) (concat "┌" (make-string (- columns 2) ?─) "┐")))
-        (should (equal (car (last lines)) (concat "└" (make-string (- columns 2) ?─) "┘")))
-        (should (string-match-p (format "SIZE %dx%d" (- columns 2) (- rows 4)) text))
-        (should (string-match-p "纸翼迁徙" (nth (- rows 3) lines)))
-        (should (string-match-p "Artist · Source" (nth (- rows 2) lines)))
+             (lines (split-string (string-remove-suffix "\n" text) "\n"))
+             (top (cl-position-if (lambda (line) (string-match-p "┌" line)) lines))
+             (bottom (cl-position-if (lambda (line) (string-match-p "└" line)) lines :from-end t))
+             (left (string-match "┌" (nth top lines)))
+             (right (string-match "┐" (nth top lines)))
+             (metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+             (line (with-current-buffer buffer
+                     (forward-line top)
+                     (buffer-substring (line-beginning-position) (line-end-position))))
+             (left-width (etaf-screensaver-presentation-tests--display-width
+                          (substring line 0 left) metrics))
+             (right-width (etaf-screensaver-presentation-tests--display-width
+                           (substring line (1+ right)) metrics))
+             (top-width (* top (plist-get metrics :line-height)))
+             (cell (plist-get metrics :char-width))
+             (frame-width (* (1+ (- right left)) cell))
+             (content-width (- right left 1))
+             (content-height (- bottom top 3)))
+        (should top)
+        (should bottom)
+        (should (<= 1 top 3))
+        (should (if (>= rows 14) (<= 2 top 3) t))
+        (should (> left-width 0))
+        (should (> right-width 0))
+        (should (> top 0))
+        (should (< bottom (1- rows)))
+        (should (equal top (- rows bottom 1)))
+        (should (<= (abs (- left-width top-width)) cell))
+        (should (<= (abs (- right-width top-width)) cell))
+        (should (<= (abs (- left-width right-width)) cell))
+        (should (<= (abs (- (+ left-width right-width frame-width)
+                            (* columns cell)))
+                    cell))
+        (should (string-match-p (format "SIZE %dx%d" content-width content-height) text))
+        (should (string-match-p "纸翼迁徙" (nth (- bottom 2) lines)))
+        (should (string-match-p "Artist · Source" (nth (1- bottom) lines)))
         (with-current-buffer buffer
           (save-excursion
             (goto-char (point-min)) (search-forward "纸翼迁徙")

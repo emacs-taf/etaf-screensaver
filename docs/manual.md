@@ -183,7 +183,7 @@ Keep the program and choose its presentation separately:
 | Style | Presentation |
 | --- | --- |
 | `full` | The work occupies the whole canvas, with no caption. |
-| `card` | A window-filling thin frame on the work's background, with its title and summary in ordinary text at the lower left. |
+| `card` | A thin frame inset by an even mat of about three line heights on every side, with its title and summary in ordinary text at the lower left. The horizontal mat is measured from the frame's cell metrics so the four distances match on screen. |
 | `band` | A wide cinema strip, a clock row and a caption. The clock never overwrites the work. |
 | `mosaic` | Up to four independent works on one page, each with its own state, seed, background and caption. Narrow windows stack them vertically. |
 
