@@ -429,13 +429,15 @@ already shared with a published row or frozen outgoing page."
                                :font-size (* .1 (face-attribute 'default :height nil t))))
                 (key (list scale metrics))
                 (cache (or (plist-get state :glyph-cache)
-                           (setf (plist-get state :glyph-cache) (make-hash-table :test #'equal)))))
+                           (setf (plist-get state :glyph-cache) (make-hash-table :test #'equal))))
+                (paints (or (plist-get state :glyph-paints)
+                            (setf (plist-get state :glyph-paints) (make-hash-table :test #'equal)))))
            (unless (equal key (plist-get state :glyph-key))
-             (clrhash cache)
+             (clrhash cache) (clrhash paints)
              (setf (plist-get state :glyph-key) key))
            (etaf-screensaver--glyph-rows
             (car (etaf-screensaver--reel-entry state (plist-get state :index)))
-            focus columns rows scale metrics cache
+            focus columns rows scale metrics cache paints
             (etaf-screensaver--reel-text-native-rows state context focus))))))
    (etaf-screensaver--reel-text-native-rows state context)))
 
@@ -550,7 +552,7 @@ A scene duration shorter than the recording loops it from the start."
           (list :kind 'text :frames frames :durations durations :ansi (plist-get data :ansi)
                 :width width :height height :index 0 :clock 0.0
                 :text-scale etaf-screensaver-reel-text-scale :text-focus nil
-                :glyph-key nil :glyph-cache nil :cache (make-vector count nil)))))))
+                :glyph-key nil :glyph-cache nil :glyph-paints nil :cache (make-vector count nil)))))))
 
 (defun etaf-screensaver-register-reel (spec)
   "Register the recorded animation described by SPEC and return the scene.

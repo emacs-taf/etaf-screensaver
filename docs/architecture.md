@@ -124,8 +124,10 @@ slices and retains its original character once in the public buffer, including
 wide text; no large font can raise the line height or resize a caption.
 The native subject cells are blanked before the enlarged subject is composed,
 without changing cached recording rows. Only the subject's source rows are
-scanned; there is no expanded per-frame character-grid cache. A work keeps at most 256
-glyph shapes for its current scale/font geometry. SVG `currentColor` inherits
+scanned; there is no expanded per-frame character-grid cache. A work keeps at
+most 64 glyph shapes and 256 styled glyphs for its current scale/font geometry.
+Their display slices and styled slice strings are read-only reusable values;
+publication cannot recolor an earlier frame. SVG `currentColor` inherits
 the original character's face; color changes do not rebuild or release a
 still-visible shape. Publication and teardown use the same image ownership
 as image reels. Terminals, missing SVG support,
