@@ -215,8 +215,8 @@
 ;;
 ;; Variable: etaf-screensaver-reel-text-scale
 ;; Recorded text size: auto (the default) fits a single work's final-frame
-;; nonblank subject, capped at 12 ordinary cells per glyph dimension;
-;; concurrent works keep their native overview.  An integer 1 through 12
+;; nonblank subject, filling up to 95% of the width and 70% of the height;
+;; concurrent works keep their native overview.  An integer 1 through 24
 ;; selects a fixed scale for every work; 1 preserves native text.  Small
 ;; viewports bound the scale.  Graphical SVG-capable Emacs draws vector
 ;; glyphs without changing line metrics or the framing font; other builds

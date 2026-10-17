@@ -38,6 +38,19 @@
             (cl-incf x width)))))
     (when left (list left top right bottom))))
 
+(defun etaf-screensaver--glyph-font-stack ()
+  "Return the frame's configured font stack for Latin and CJK text.
+Resolve both through the active fontset, so an enlarged glyph uses the same
+fonts the buffer text uses instead of a family chosen by the application."
+  (let* ((latin (face-attribute 'default :family nil t))
+         (cjk (let ((font (and (fboundp 'internal-char-font)
+                               (internal-char-font nil #x4e2d))))
+                (setq font (car-safe font))
+                (and (fontp font) (font-get font :family))))
+         (families (delete-dups (delq nil (mapcar (lambda (family) (format "%s" family))
+                                                  (list latin cjk))))))
+    (mapconcat #'identity families ", ")))
+
 (defun etaf-screensaver--glyph-slices (char face scale metrics cache)
   "Return CHAR's immutable display slices in FACE at SCALE using METRICS.
 Colors come from the displaying character's face, not the image descriptor.
@@ -51,13 +64,19 @@ CACHE keeps at most 64 shapes for the current font/scale geometry."
          (key (list char bold italic decoration))
          (slices (gethash key cache)))
     (unless slices
-      (let* ((width (* scale (char-width char) (plist-get metrics :char-width)))
+      (let* ((cells (max 1 (char-width char)))
+             (width (* scale cells (plist-get metrics :char-width)))
              (height (* scale (plist-get metrics :line-height)))
+             ;; Size the glyph in pixels so it fits its cell box: a wide
+             ;; character is about square, a narrow one about 0.6 em wide.
+             ;; Points would overflow the box and clip to a sliver.
+             (font-size (min (* height .92)
+                             (/ width (if (> cells 1) 1.0 .62))))
              (svg (svg-create width height)))
         (svg-text svg (char-to-string char) :x 0
                   :y (/ (* height (plist-get metrics :ascent)) 100.0)
                   :font-family (plist-get metrics :family)
-                  :font-size (* scale (plist-get metrics :font-size))
+                  :font-size font-size
                   :font-weight (if bold "bold" "normal")
                   :font-style (if italic "italic" "normal")
                   :text-decoration decoration :fill "currentColor")

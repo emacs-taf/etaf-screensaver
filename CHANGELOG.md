@@ -41,6 +41,14 @@
 
 ### Changed
 
+- Enlarged recorded text uses the frame's own font stack, including its
+  configured CJK family, instead of a family chosen by the application.  The
+  automatic size now fills up to 95% of the work width and 70% of its height,
+  capped at 24 cells per glyph dimension, so a poem reads as a page rather
+  than a line of small type.
+- The light page gains `equalizer` (墨线律动): monochrome level bars that follow
+  the canvas instead of a stretched image.  Typewriter recordings drop the
+  cursor block that would otherwise grow into a solid bar.
 - The light `ink` reels now carry Su Shi lines — 《和子由渑池怀旧》「人生到处知何似
   应似飞鸿踏雪泥」, 《定风波》「一蓑烟雨任平生」 and 《临江仙》「小舟从此逝
   江海寄余生」 — type-set one character at a time in a single ink color, without

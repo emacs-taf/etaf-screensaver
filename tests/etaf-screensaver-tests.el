@@ -188,7 +188,7 @@
                           tte-beams tte-synthgrid tte-thunderstorm tte-decrypt
                           tte-fireworks tte-bubbles tte-unstable tte-blackhole
                           tte-rain tte-vhstape tte-burn tte-ink-snow-mud
-                          tte-ink-rain tte-ink-river))
+                          tte-ink-rain tte-ink-river equalizer))
       (ert-info ((format "Scene: %s" scene))
         (let ((buffer (etaf-screensaver-start scene)))
           (let ((deadline (+ (float-time) 1)))

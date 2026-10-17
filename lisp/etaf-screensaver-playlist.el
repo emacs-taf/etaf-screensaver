@@ -49,11 +49,12 @@ A mosaic page has at most four works and never pads by duplicating a work."
 
 (defcustom etaf-screensaver-reel-text-scale 'auto
   "Scale recorded text in graphical frames without enlarging image reels.
-`auto' fits a single work's final nonblank subject, up to twelve times the
-ordinary cell size; concurrent works keep their native overview.  An
-integer from 1 to 12 chooses a fixed scale for every work; 1 keeps
-native text.  Small viewports bound that scale.  Terminals and graphical
-builds without SVG keep native text.  Settings are snapshotted at start."
+`auto' fills up to 95% of the work width and 70% of its height with the
+single work's final nonblank subject, capped at 24 cells per glyph
+dimension; concurrent works keep their native overview.  An integer from
+1 to 24 chooses a fixed scale for every work; 1 keeps native text.  Small
+viewports bound that scale.  Terminals and graphical builds without SVG
+keep native text.  Settings are snapshotted at start."
   :type '(choice (const :tag "Fit the text subject" auto) integer)
   :group 'etaf-screensaver)
 
@@ -176,7 +177,7 @@ Changes take effect at the next start.  Invalid options fail before takeover."
     (ink :title "文墨"
          :summary "米色纸面、深墨字与光影"
          :theme light :order sequential :background "#F4F1EA" :presentation card
-         :scenes (tte-ink-snow-mud tte-ink-rain tte-ink-river))
+         :scenes (equalizer tte-ink-snow-mud tte-ink-rain tte-ink-river))
     (ember :title "余烬"
            :summary "暖色粒子与缓缓落下的沙火"
            :theme dark :order sequential :background "#0A0503" :presentation mosaic
@@ -289,8 +290,8 @@ Explicit item or group styles precede the global style and pack suggestion."
     (etaf-screensaver--fail "Transition duration must be between 0 and 5 seconds"))
   (unless (or (eq etaf-screensaver-reel-text-scale 'auto)
               (and (integerp etaf-screensaver-reel-text-scale)
-                   (<= 1 etaf-screensaver-reel-text-scale 12)))
-    (etaf-screensaver--fail "Recorded text scale must be auto or an integer from 1 to 12"))
+                   (<= 1 etaf-screensaver-reel-text-scale 24)))
+    (etaf-screensaver--fail "Recorded text scale must be auto or an integer from 1 to 24"))
   (unless (or (null etaf-screensaver-seed) (integerp etaf-screensaver-seed))
     (etaf-screensaver--fail "Seed must be an integer or nil"))
   (unless (proper-list-p etaf-screensaver-scene-options)

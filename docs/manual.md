@@ -232,19 +232,19 @@ nonblank cell rectangle in its final frame. Its current animated characters
 are drawn larger at the center; surrounding beams, rain and other effects keep
 playing at their native cell size. The recording's timing and colors stay intact.
 For a single work, the automatic scale fits the available work rectangle and
-stops at 12 times ordinary cell size. Concurrent works keep their native
+fills up to 95% of the work width and 70% of its height. Concurrent works keep their native
 overview instead of competing magnified subjects; an explicit integer scale
 still applies to every work. An empty final frame keeps native text.
 
 ```elisp
 (setq etaf-screensaver-reel-text-scale 'auto) ; default, adapts on resize
-;; Or choose a fixed integer 1–12; 1 preserves native text.
+;; Or choose a fixed integer 1–24; 1 preserves native text.
 ```
 
 Small windows bound a fixed scale too. Terminals and graphical builds without
 SVG use native text without losing content. This setting never enlarges image
 recordings and is snapshotted at start, including later pages. Stop and restart
-to apply a change. Values other than `auto` or integers 1–12 fail before window
+to apply a change. Values other than `auto` or integers 1–24 fail before window
 takeover. For recordings whose final frame is not a meaningful subject, use 1.
 
 ## Concepts

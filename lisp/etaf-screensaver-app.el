@@ -23,6 +23,7 @@
 (require 'etaf-screensaver-tte)
 (require 'etaf-screensaver-frames)
 (require 'etaf-screensaver-scene-donut)
+(require 'etaf-screensaver-scene-equalizer)
 (require 'etaf-screensaver-views)
 
 (defcustom etaf-screensaver-idle-delay 300

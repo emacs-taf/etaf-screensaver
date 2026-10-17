@@ -417,7 +417,7 @@
   "Invalid text scales fail before takeover without changing the caller buffer."
   (etaf-screensaver-reel-tests--clean
     (let ((editor (window-buffer)))
-      (dolist (value '(0 13 nil invalid))
+      (dolist (value '(0 25 nil invalid))
         (let ((etaf-screensaver-reel-text-scale value))
           (should-error (etaf-screensaver-start 'tte-beams) :type 'etaf-screensaver-error)
           (let ((active (plist-get (etaf-screensaver-status) :active))
