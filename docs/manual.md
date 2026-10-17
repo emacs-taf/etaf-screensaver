@@ -546,7 +546,10 @@ Recordings usually end with the resolved text sitting still; run
 to keep the moving part plus a short hold and drop the rest, then import the
 trimmed file.  A trimmed work loops its motion instead of freezing, and a
 reel that knows its frame count registers that length as its natural
-duration so a program plays it once before moving on.
+duration so a program plays it once before moving on.  To fit a paper page,
+`scripts/plain-recording.py animation.tterec` drops every colour run, paints
+the text in one foreground colour (default `#2B3036`) and appends its own
+still tail.
 `lisp/reels` ships fourteen recordings produced with Terminal Text Effects,
 grouped by the bundled neon, space, ink and ember packs. The light `ink` reels
 carry Su Shi lines (雪泥鸿爪、一蓑烟雨、江海余生) type-set one character at a
