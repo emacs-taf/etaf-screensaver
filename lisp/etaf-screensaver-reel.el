@@ -405,12 +405,17 @@ already shared with a published row or frozen outgoing page."
   (or
    (when (and (not (eq (plist-get state :text-scale) 1))
               (display-graphic-p) (image-type-available-p 'svg))
-     (let* ((focus (or (plist-get state :text-focus)
+     (let* ((final (car (etaf-screensaver--reel-entry
+                         state (1- (length (plist-get state :frames))))))
+            (focus (or (plist-get state :text-focus)
                       (setf (plist-get state :text-focus)
-                            (or (etaf-screensaver--glyph-focus
-                                 (car (etaf-screensaver--reel-entry
-                                       state (1- (length (plist-get state :frames))))))
-                                'empty))))
+                            (or (etaf-screensaver--glyph-focus final) 'empty))))
+            (subject (unless (eq focus 'empty)
+                       (or (plist-get state :glyph-subject)
+                           ;; Cache in place: the key exists from creation,
+                           ;; so this mutates the state instead of a copy.
+                           (setf (plist-get state :glyph-subject)
+                                 (etaf-screensaver--glyph-subject final focus)))))
             (columns (plist-get context :columns)) (rows (plist-get context :rows))
             (policy (plist-get state :text-scale))
             (scale (if (eq focus 'empty) 1
@@ -436,13 +441,28 @@ already shared with a published row or frozen outgoing page."
              (setf (plist-get state :glyph-key) key))
            (etaf-screensaver--glyph-rows
             (car (etaf-screensaver--reel-entry state (plist-get state :index)))
-            focus columns rows scale metrics cache paints
-            (etaf-screensaver--reel-text-native-rows state context focus))))))
+            focus columns rows scale metrics cache paints subject
+            (etaf-screensaver--reel-text-native-rows state context focus subject))))))
    (etaf-screensaver--reel-text-native-rows state context)))
 
-(defun etaf-screensaver--reel-text-native-rows (state context &optional exclude)
-  "Fit STATE's text into CONTEXT, optionally blanking EXCLUDE's cell bounds.
-Center, crop or pad at native cell size without changing cached source rows."
+(defun etaf-screensaver--reel-blank-subject (line start end subject)
+  "Return LINE with SUBJECT characters between columns START and END blanked.
+Cell widths, other characters and their faces are preserved."
+  (let ((column 0) (position 0) (length (length line)) parts)
+    (while (< position length)
+      (let* ((char (aref line position)) (width (char-width char)))
+        (if (and (>= column start) (< column end) (gethash char subject))
+            (push (make-string width ?\s) parts)
+          (push (substring line position (1+ position)) parts))
+        (cl-incf position)
+        (cl-incf column width)))
+    (when parts (apply #'concat (nreverse parts)))))
+
+(defun etaf-screensaver--reel-text-native-rows (state context &optional exclude subject)
+  "Fit STATE's text into CONTEXT, blanking EXCLUDE's SUBJECT characters.
+Center, crop or pad at native cell size without changing cached source rows.
+Only the settled subject clears for its enlarged replacement; transient effect
+glyphs inside the rectangle keep playing at native size."
   (let* ((columns (plist-get context :columns))
          (rows (plist-get context :rows))
          (source-width (plist-get state :width))
@@ -461,12 +481,12 @@ Center, crop or pad at native cell size without changing cached source rows."
               collect
               (let* ((source-row (+ first row))
                      (line (aref frame-rows source-row))
-                     (blank (and exclude (<= (nth 1 exclude) source-row)
-                                 (< source-row (nth 3 exclude)))))
-                (when blank
-                  (setq line (concat (etaf-screensaver--presentation-crop line (nth 0 exclude))
-                                     (make-string (- (nth 2 exclude) (nth 0 exclude)) ?\s)
-                                     (etaf-screensaver--presentation-crop line (- source-width (nth 2 exclude)) (nth 2 exclude)))))
+                     (blank (and exclude subject
+                                 (<= (nth 1 exclude) source-row)
+                                 (< source-row (nth 3 exclude))
+                                 (etaf-screensaver--reel-blank-subject
+                                  line (nth 0 exclude) (nth 2 exclude) subject))))
+                (when blank (setq line blank))
                 (cond ((<= source-width columns)
                        (concat (make-string left ?\s) line (make-string right ?\s)))
                       (blank (etaf-screensaver--presentation-crop line columns crop))
@@ -551,7 +571,8 @@ A scene duration shorter than the recording loops it from the start."
           (list :kind 'text :frames frames :durations durations :ansi (plist-get data :ansi)
                 :width width :height height :index 0 :clock 0.0
                 :text-scale etaf-screensaver-reel-text-scale :text-focus nil
-                :glyph-key nil :glyph-cache nil :glyph-paints nil :cache (make-vector count nil)))))))
+                :glyph-key nil :glyph-cache nil :glyph-paints nil
+                :glyph-subject nil :cache (make-vector count nil)))))))
 
 (defun etaf-screensaver-register-reel (spec)
   "Register the recorded animation described by SPEC and return the scene.

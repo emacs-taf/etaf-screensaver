@@ -90,11 +90,40 @@ CACHE keeps at most 64 shapes for the current font/scale geometry."
         (when (< (hash-table-count cache) 64) (puthash key slices cache))))
     slices))
 
+(defun etaf-screensaver--glyph-subject (rows focus)
+  "Return FOCUS's settled characters in ROWS as a hash set.
+Only these characters grow; transient effect glyphs stay at native size."
+  (let ((chars (make-hash-table :test #'eq)))
+    (cl-loop for y from (nth 1 focus) below (nth 3 focus)
+             while (< y (length rows))
+             do (let ((row (aref rows y)) (x 0))
+                  (dotimes (i (length row))
+                    (let* ((char (aref row i)) (width (char-width char)))
+                      (when (and (> width 0) (>= x (nth 0 focus))
+                                 (< x (nth 2 focus)) (not (memq char '(?\s ?\t))))
+                        (puthash char t chars))
+                      (cl-incf x width)))))
+    chars))
+
+(defun etaf-screensaver--glyph-quantize-color (color)
+  "Return COLOR snapped to a small palette step, or nil.
+An animated fade otherwise re-rasterizes every SVG glyph on each step; eight
+levels per channel keep the motion while bounding recolouring work."
+  (when (and (stringp color) (string-match "\\`#\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)\\'" color))
+    (let ((levels (lambda (index)
+                    (let ((value (/ (string-to-number (match-string index color) 16) 32.0)))
+                      (* 36 (round value))))))
+      (format "#%02x%02x%02x" (funcall levels 1) (funcall levels 2) (funcall levels 3)))))
+
 (defun etaf-screensaver--glyph-runs (char face scale metrics shapes paints)
   "Return immutable styled slice strings for CHAR and FACE.
 SHAPES caches geometry; PAINTS keeps at most 512 styled glyphs, separately
 from the shape's native image so color changes never rebuild its SVG."
-  (let* ((key (cons char face)) (runs (gethash key paints)))
+  (let* ((ink (etaf-screensaver--glyph-quantize-color
+               (etaf-screensaver--glyph-attribute face :foreground)))
+         (face (if ink (list :foreground ink) face))
+         (key (cons char face))
+         (runs (gethash key paints)))
     (unless runs
       (let* ((width (char-width char)) (span (* width scale))
              (slices (unless (= char ?\s) (etaf-screensaver--glyph-slices char face scale metrics shapes))))
@@ -109,7 +138,7 @@ from the shape's native image so color changes never rebuild its SVG."
         (when (< (hash-table-count paints) 512) (puthash key runs paints))))
     runs))
 
-(defun etaf-screensaver--glyph-rows (source focus columns rows scale metrics cache paints base)
+(defun etaf-screensaver--glyph-rows (source focus columns rows scale metrics cache paints subject base)
   "Enlarge SOURCE's FOCUS over BASE, retaining the surrounding animation.
 Fit into COLUMNS by ROWS with SCALE-cell glyphs.  METRICS, bounded shape
 CACHE and styled PAINTS belong to this geometry.  Never alter source rows."
@@ -138,8 +167,7 @@ CACHE and styled PAINTS belong to this geometry.  Never alter source rows."
                 (when (and (> width 0) (>= column source-left)
                            (<= (+ column width) (nth 2 focus))
                            (>= x left) (<= (+ x span) right)
-                           (or (/= char ?\s) (etaf-screensaver--glyph-attribute face :background)
-                               (etaf-screensaver--glyph-attribute face :inverse-video)))
+                           (gethash char subject))
                   (let ((runs (etaf-screensaver--glyph-runs char face scale metrics cache paints)))
                     (dotimes (slice scale)
                       (let* ((y (+ top (* row scale) slice))
