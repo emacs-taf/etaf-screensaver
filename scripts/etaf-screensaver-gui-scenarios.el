@@ -121,8 +121,20 @@
                (etaf-gui-verifier-assert "no-mode-line" (null mode-line-format))
                (etaf-gui-verifier-assert
                 "no-workspace-controls"
-                (not (string-match-p "SPC\\|fps\\|参数"
-                                     (buffer-substring-no-properties (point-min) (point-max))))))))
+                (with-current-buffer buffer
+                  ;; A card caption may legitimately name the frame rate, so
+                  ;; detect control affordances, not summary words.
+                  (let ((position (point-min)) found)
+                    (while (and (< position (point-max)) (not found))
+                      (when (or (get-text-property position 'keymap)
+                                (get-text-property position 'help-echo)
+                                (get-text-property position 'mouse-face))
+                        (setq found t))
+                      (setq position (next-property-change position nil (point-max))))
+                    (and (not found)
+                         (not (string-match-p "SPC\\|参数"
+                                              (buffer-substring-no-properties
+                                               (point-min) (point-max)))))))))))
           (etaf-gui-verifier-line-height-assertions buffer))))
      :actions
      (append
