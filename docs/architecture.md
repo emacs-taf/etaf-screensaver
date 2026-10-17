@@ -114,7 +114,24 @@ dimensions, color depths and license per file instead of claiming universal
 support. The loader scans `.esr` specs beside `.esc` scenes and skips a
 broken spec without disturbing the others.
 
-Text recordings render as canvas rows; image recordings take a second path.
+Text recordings retain native canvas rows for the surrounding animation.
+Their final frame supplies nonblank subject bounds, not a per-effect lookup.
+Graphical SVG builds can project that subject as cached vector glyphs at a
+bounded, viewport-dependent scale. Automatic sizing applies to single-work
+pages; concurrent works retain their native overview unless a fixed scale is
+explicitly selected. Each glyph occupies complete base-height
+slices and retains its original character once in the public buffer, including
+wide text; no large font can raise the line height or resize a caption.
+The native subject cells are blanked before the enlarged subject is composed,
+without changing cached recording rows. Only the subject's source rows are
+scanned; there is no expanded per-frame character-grid cache. A work keeps at most 256
+glyph shapes for its current scale/font geometry. SVG `currentColor` inherits
+the original character's face; color changes do not rebuild or release a
+still-visible shape. Publication and teardown use the same image ownership
+as image reels. Terminals, missing SVG support,
+scale 1 and an empty final frame retain native text.
+
+Image recordings take a second path.
 The `frames` provider returns image file names and a pixel size; the reel
 layer retains each frame's native pixel dimensions or scales it down uniformly
 when the canvas is smaller. It centers the image on character rows and crops it

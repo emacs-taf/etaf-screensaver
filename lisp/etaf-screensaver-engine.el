@@ -236,13 +236,20 @@ Scene rows may be borrowed; publication owns any added background properties."
           (etaf-screensaver--session-published-frame session) nil
           (etaf-screensaver--session-children session)
           (cl-loop for tile in tiles for rect in (plist-get layout :slots) for index from 0
-                   collect (etaf-screensaver--session-create
-                            (plist-put (copy-sequence tile) :presentation 'full)
-                            (+ seed index) (nth 2 rect) (nth 3 rect) nil))
+                   collect
+                   (let ((child (plist-put (copy-sequence tile) :presentation 'full)))
+                     ;; Concurrent works are an overview of their complete
+                     ;; animation, not several competing magnified subjects.
+                     (when (and (> (length tiles) 1)
+                                (eq (plist-get child :reel-text-scale) 'auto))
+                       (setf (plist-get child :reel-text-scale) 1))
+                     (etaf-screensaver--session-create
+                      child (+ seed index) (nth 2 rect) (nth 3 rect) nil)))
           (etaf-screensaver--session-state session)
           (unless tiles
-            (funcall (etaf-screensaver--scene-create (etaf-screensaver--session-scene session))
-                     (etaf-screensaver--session-context session)))))
+            (let ((etaf-screensaver-reel-text-scale (plist-get item :reel-text-scale)))
+              (funcall (etaf-screensaver--scene-create (etaf-screensaver--session-scene session))
+                       (etaf-screensaver--session-context session))))))
   (when (etaf-screensaver--session-buffer session)
     (etaf-screensaver--session-render session))
   (cl-incf (etaf-value (etaf-screensaver--session-revision session))))

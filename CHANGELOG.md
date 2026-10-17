@@ -41,6 +41,11 @@
 
 ### Changed
 
+- Single-work recorded text subjects grow to a readable size in graphical SVG builds,
+  without changing the caption font, recording timing or surrounding effects.
+  `etaf-screensaver-reel-text-scale` selects automatic sizing or a fixed 1–12
+  scale; 1 keeps the native size, also used without graphical SVG support.
+
 - Gallery cards fill the editing area with a thin frame and ordinary lower-left
   title/description. Images retain their native size when they fit and only
   scale down proportionally, avoiding blurred enlargement. Generated gallery

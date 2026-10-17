@@ -145,8 +145,9 @@
 ;; unfinished validation completes at selection.  A next-page failure is
 ;; reported only when that page is selected, not while the current page plays.
 ;; Custom providers keep their synchronous :read contract.  Playback follows
-;; the recording's own timing.  Text recordings center their fixed cell canvas
-;; and crop smaller windows; images retain native pixel dimensions when they
+;; the recording's own timing.  Recorded text scales its final-frame subject
+;; according to etaf-screensaver-reel-text-scale while retaining native
+;; surrounding animation; images retain native pixel dimensions when they
 ;; fit and otherwise scale down proportionally, never enlarging.  When the
 ;; spec carries :frame-count and :frame-rate the reel registers that full
 ;; length as its natural :duration, so a program plays the work once instead
@@ -211,6 +212,16 @@
 ;; RATE :presentation STYLE :params ALIST :scenes (SCENE...)).  Bundled packs cover the shipped
 ;; scenes; add your own with `add-to-list' after baking or registering
 ;; scenes.  Playing a pack keeps its works in one visual language.
+;;
+;; Variable: etaf-screensaver-reel-text-scale
+;; Recorded text size: auto (the default) fits a single work's final-frame
+;; nonblank subject, capped at 12 ordinary cells per glyph dimension;
+;; concurrent works keep their native overview.  An integer 1 through 12
+;; selects a fixed scale for every work; 1 preserves native text.  Small
+;; viewports bound the scale.  Graphical SVG-capable Emacs draws vector
+;; glyphs without changing line metrics or the framing font; other builds
+;; keep native text.  Image recordings are unaffected.  Snapshotted at start;
+;; invalid values signal etaf-screensaver-error before window takeover.
 ;;
 ;; Variable: etaf-screensaver-transition-duration
 ;; Reveal seconds between different pages, default 1.2, bounded to 0–5.

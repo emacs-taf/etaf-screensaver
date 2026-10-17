@@ -3,6 +3,10 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-reel-tests-scaled-color-snapshots", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "A scaled recording's color-only update preserves the new color and leaves the earlier public buffer snapshot unchanged."},
+    {"name": "etaf-screensaver-reel-tests-concurrent-text-overview", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Concurrent works preserve native text in automatic overview mode while honoring an explicit fixed text scale."},
+    {"name": "etaf-screensaver-reel-tests-text-scale-resize", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Recorded block glyphs and wide Unicode text keep movement, snapshotted scale and exact row geometry through resize, with native fallback outside graphical SVG builds."},
+    {"name": "etaf-screensaver-reel-tests-invalid-text-scale", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Invalid recorded-text scale values fail before window takeover and leave the caller buffer selected."},
     {"name": "etaf-screensaver-presentation-tests-card-fills-canvas", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "The gallery frame fills the viewport and shows the work title and summary at the lower left in ordinary text on light and dark paper."},
     {"name": "etaf-screensaver-reel-tests-images-preserve-native-size", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Image works never upscale, retain native size when they fit and publish every image row without stretching or omitting the final slice."},
     {"name": "etaf-screensaver-presentation-tests-life-rules-and-resize", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Seeded Life matches a public callback reference for wrapped/clipped edges, custom rules, extinction reseeding and shrink/expansion."},

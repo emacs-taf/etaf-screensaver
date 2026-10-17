@@ -218,11 +218,34 @@ report the actual concurrent selections.
 A drawable canvas of **64 columns by 24 rows** is the minimum recommended
 viewport for the four presentations. Short windows retain their borders and
 captions with less artwork. Below the minimum, fixed framing geometry is
-clipped deliberately; glyphs are not squeezed. Text recordings keep their native
-cell size and center-crop; image recordings retain native pixel dimensions when
+clipped deliberately; glyphs are not squeezed. Recorded text adapts its subject
+size as described below; image recordings retain native pixel dimensions when
 possible and only scale down, preserving aspect ratio, to fit their allocated tile.
 Resizing preserves reel position and passes the new content rectangle to each
 work's resize callback, without changing page order.
+
+### Recorded text size
+
+Graphical Emacs with SVG support enlarges a text recording's subject without
+stretching pixels or changing the border/caption font. The subject is the
+nonblank cell rectangle in its final frame. Its current animated characters
+are drawn larger at the center; surrounding beams, rain and other effects keep
+playing at their native cell size. The recording's timing and colors stay intact.
+For a single work, the automatic scale fits the available work rectangle and
+stops at 12 times ordinary cell size. Concurrent works keep their native
+overview instead of competing magnified subjects; an explicit integer scale
+still applies to every work. An empty final frame keeps native text.
+
+```elisp
+(setq etaf-screensaver-reel-text-scale 'auto) ; default, adapts on resize
+;; Or choose a fixed integer 1–12; 1 preserves native text.
+```
+
+Small windows bound a fixed scale too. Terminals and graphical builds without
+SVG use native text without losing content. This setting never enlarges image
+recordings and is snapshotted at start, including later pages. Stop and restart
+to apply a change. Values other than `auto` or integers 1–12 fail before window
+takeover. For recordings whose final frame is not a meaningful subject, use 1.
 
 ## Concepts
 
@@ -465,9 +488,9 @@ bundled reels in `lisp/reels`; the default user directory is
 A *reel* plays a recording that an external animation tool produced, without
 running that tool or transcribing its algorithms. The native recording stays
 in its own format; a small `.esr` spec names the provider, dimensions, frame
-count and license. Playback follows the recording's own per-frame timing and
-centers its fixed canvas, cropping both edges in a smaller window. A scene
-duration longer than the recording loops it.
+count and license. Playback follows the recording's own per-frame timing. Text uses the subject sizing described
+above, with native center-fitting for the surrounding animation; image frames
+center without enlargement. A scene duration longer than the recording loops it.
 
 Many recorded effects are entrance animations: the text resolves and the
 frames then hold. Choose a recording that keeps changing — the bundled

@@ -307,6 +307,124 @@
       (setq position (next-single-property-change position 'display text (length text))))
     (nreverse displays)))
 
+(ert-deftest etaf-screensaver-reel-tests-text-scale-resize ()
+  "Recorded Unicode text keeps movement, source characters and resize geometry."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file))
+          (etaf-screensaver-reel-text-scale 3))
+      (unwind-protect
+          (progn
+            (etaf-screensaver-reel-tests--provider
+             'reel-test-scalable
+             (vector (concat "        \n\e[31m ▅▆▇█▂  \e[0m\n        ")
+                     (concat "        \n\e[34m E中AF  \e[0m\n        "))
+             8 3 [0.3 0.3] t)
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-scalable-text :provider 'reel-test-scalable :recording file))
+            (let ((buffer (etaf-screensaver-start '(:scene reel-test-scalable-text :presentation card))))
+              ;; The new value only applies to the next start, including later
+              ;; pages.  Existing glyph geometry stays on its original policy.
+              (setq etaf-screensaver-reel-text-scale 1)
+              (dolist (margins '((10 10) (3 3) (0 0)))
+                (apply #'set-window-margins nil margins)
+                (etaf-screensaver-reel-tests--wait
+                 (lambda ()
+                   (and (plist-get (etaf-screensaver-status) :active)
+                        (= (plist-get (etaf-screensaver-status) :columns) (1- (window-body-width)))
+                        (string-match-p "E中AF" (etaf-screensaver-reel-tests--text buffer)))))
+                (let* ((metrics (etaf-display-metrics (etaf-runtime-for-buffer buffer)))
+                       (text (with-current-buffer buffer (buffer-substring (point-min) (point-max))))
+                       (images (delq nil
+                                     (mapcar (lambda (display)
+                                               (let ((image (cadr display)))
+                                                 (and (eq (car-safe image) 'image) image)))
+                                             (etaf-screensaver-reel-tests--displays text))))
+                       (has-images (not (null images)))
+                       (svg (and (display-graphic-p) (image-type-available-p 'svg)))
+                       (expected (* (plist-get (etaf-screensaver-status) :columns)
+                                    (plist-get metrics :char-width))))
+                  (should (eq has-images svg))
+                  (dolist (image images)
+                    (let ((height (image-property image :max-height)))
+                      (should (= height (* 3 (plist-get metrics :line-height))))))
+                  (dolist (row (split-string text "\n" t))
+                    (let ((width (etaf-string-pixel-width row)))
+                      (should (= width expected))))))
+              (etaf-screensaver-stop)))
+        (etaf-screensaver-stop)
+        (delete-file file)))))
+
+(ert-deftest etaf-screensaver-reel-tests-scaled-color-snapshots ()
+  "A color-only text frame changes color without recoloring an older snapshot."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file))
+          (etaf-screensaver-reel-text-scale 3))
+      (unwind-protect
+          (progn
+            (etaf-screensaver-reel-tests--provider
+             'reel-test-scaled-color
+             ["\e[38;2;17;34;51mETAF\e[0m" "\e[38;2;170;187;204mETAF\e[0m"]
+             4 1 [0.3 0.3] t)
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-scaled-color-text :provider 'reel-test-scaled-color :recording file))
+            (let* ((buffer (etaf-screensaver-start '(:scene reel-test-scaled-color-text :presentation full)))
+                   (snapshot (with-current-buffer buffer (buffer-substring (point-min) (point-max)))))
+              (cl-labels ((foreground (text)
+                            (let* ((position (string-match "ETAF" text))
+                                   (face (and position (get-text-property position 'face text)))
+                                   (faces (if (keywordp (car-safe face)) (list face) face)))
+                              (cl-some (lambda (part) (plist-get part :foreground)) faces))))
+                (let ((initial (foreground snapshot)))
+                  (should (equal initial "#112233")))
+                (etaf-screensaver-reel-tests--wait
+                 (lambda ()
+                   (and (plist-get (etaf-screensaver-status) :active)
+                        (with-current-buffer buffer
+                          (equal (foreground (buffer-substring (point-min) (point-max))) "#aabbcc")))))
+                (let ((retained (foreground snapshot)))
+                  (should (equal retained "#112233"))))))
+        (etaf-screensaver-stop)
+        (delete-file file)))))
+
+(ert-deftest etaf-screensaver-reel-tests-concurrent-text-overview ()
+  "Automatic concurrent text stays native; an explicit scale still applies."
+  (etaf-screensaver-reel-tests--clean
+    (let ((file (etaf-screensaver-reel-tests--file)))
+      (unwind-protect
+          (progn
+            (etaf-screensaver-reel-tests--provider 'reel-test-overview ["ETAF"] 4 1)
+            (etaf-screensaver-register-reel
+             (list :id 'reel-test-overview-text :provider 'reel-test-overview :recording file))
+            (dolist (scale '(auto 2))
+              (let* ((etaf-screensaver-reel-text-scale scale)
+                     (buffer (etaf-screensaver-start
+                              '(:presentation mosaic :scenes (reel-test-overview-text reel-test-overview-text))))
+                     (status (etaf-screensaver-status))
+                     (text (with-current-buffer buffer (buffer-substring (point-min) (point-max))))
+                     (has-images (not (null
+                                       (cl-some (lambda (display) (eq (car-safe (cadr display)) 'image))
+                                                (etaf-screensaver-reel-tests--displays text)))))
+                     (expected (and (eq scale 2) (display-graphic-p) (image-type-available-p 'svg)))
+                     (has-text (not (null (string-match-p "ETAF" (substring-no-properties text))))))
+                (should (= (length (plist-get status :works)) 2))
+                (should has-text)
+                (should (eq has-images expected)))
+              (etaf-screensaver-stop)))
+        (etaf-screensaver-stop)
+        (delete-file file)))))
+
+(ert-deftest etaf-screensaver-reel-tests-invalid-text-scale ()
+  "Invalid text scales fail before takeover without changing the caller buffer."
+  (etaf-screensaver-reel-tests--clean
+    (let ((editor (window-buffer)))
+      (dolist (value '(0 13 nil invalid))
+        (let ((etaf-screensaver-reel-text-scale value))
+          (should-error (etaf-screensaver-start 'tte-beams) :type 'etaf-screensaver-error)
+          (let ((active (plist-get (etaf-screensaver-status) :active))
+                (restored (eq (window-buffer) editor)))
+            (should-not active)
+            (should restored)))))))
+
 (ert-deftest etaf-screensaver-reel-tests-images-preserve-native-size ()
   "Image works fit without enlargement and retain their full native extent."
   (etaf-screensaver-reel-tests--clean

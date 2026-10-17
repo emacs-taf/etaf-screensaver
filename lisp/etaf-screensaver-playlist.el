@@ -47,6 +47,16 @@ A mosaic page has at most four works and never pads by duplicating a work."
                  (const :tag "Mosaic wall" mosaic))
   :group 'etaf-screensaver)
 
+(defcustom etaf-screensaver-reel-text-scale 'auto
+  "Scale recorded text in graphical frames without enlarging image reels.
+`auto' fits a single work's final nonblank subject, up to twelve times the
+ordinary cell size; concurrent works keep their native overview.  An
+integer from 1 to 12 chooses a fixed scale for every work; 1 keeps
+native text.  Small viewports bound that scale.  Terminals and graphical
+builds without SVG keep native text.  Settings are snapshotted at start."
+  :type '(choice (const :tag "Fit the text subject" auto) integer)
+  :group 'etaf-screensaver)
+
 (defcustom etaf-screensaver-transition-duration 1.2
   "Seconds for a gentle top-to-bottom reveal between different pages.
 Zero disables transitions.  The old page keeps its colors while the new
@@ -149,6 +159,7 @@ Changes take effect at the next start.  Invalid options fail before takeover."
                             etaf-screensaver-background)
             :presentation presentation :pack-title (plist-get item :pack-title)
             :pack-id (plist-get item :pack-id)
+            :reel-text-scale etaf-screensaver-reel-text-scale
             :duration duration :frame-rate (min rate etaf-screensaver-max-frame-rate)
             :params (etaf-screensaver--parameters
                      scene (append (plist-get item :params) (plist-get defaults :params)))))))
@@ -276,6 +287,10 @@ Explicit item or group styles precede the global style and pack suggestion."
   (unless (and (numberp etaf-screensaver-transition-duration)
                (<= 0 etaf-screensaver-transition-duration 5))
     (etaf-screensaver--fail "Transition duration must be between 0 and 5 seconds"))
+  (unless (or (eq etaf-screensaver-reel-text-scale 'auto)
+              (and (integerp etaf-screensaver-reel-text-scale)
+                   (<= 1 etaf-screensaver-reel-text-scale 12)))
+    (etaf-screensaver--fail "Recorded text scale must be auto or an integer from 1 to 12"))
   (unless (or (null etaf-screensaver-seed) (integerp etaf-screensaver-seed))
     (etaf-screensaver--fail "Seed must be an integer or nil"))
   (unless (proper-list-p etaf-screensaver-scene-options)

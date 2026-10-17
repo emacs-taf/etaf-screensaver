@@ -18,6 +18,8 @@
 (require 'subr-x)
 (require 'etaf-screensaver-model)
 (require 'etaf-screensaver-ansi)
+(require 'etaf-screensaver-glyphs)
+(defvar etaf-screensaver-reel-text-scale)
 (declare-function image-size "image.c" (spec &optional pixels frame))
 
 (defvar etaf-screensaver--reel-directory nil
@@ -399,9 +401,47 @@ already shared with a published row or frozen outgoing page."
     (etaf-screensaver--reel-image-layout-rows layout)))
 
 (defun etaf-screensaver--reel-text-rows (state context)
-  "Return STATE's current text frame fitted into CONTEXT's canvas.
-The frame is centered both ways; a canvas smaller than the recording crops
-both edges and a larger one pads with spaces."
+  "Render recorded text at its snapshotted scale, keeping native TTY output."
+  (or
+   (when (and (not (eq (plist-get state :text-scale) 1))
+              (display-graphic-p) (image-type-available-p 'svg))
+     (let* ((focus (or (plist-get state :text-focus)
+                      (setf (plist-get state :text-focus)
+                            (or (etaf-screensaver--glyph-focus
+                                 (car (etaf-screensaver--reel-entry
+                                       state (1- (length (plist-get state :frames))))))
+                                'empty))))
+            (columns (plist-get context :columns)) (rows (plist-get context :rows))
+            (policy (plist-get state :text-scale))
+            (scale (if (eq focus 'empty) 1
+                     (max 1 (min (/ rows (- (nth 3 focus) (nth 1 focus)))
+                                 (/ columns (- (nth 2 focus) (nth 0 focus)))
+                                 (if (eq policy 'auto)
+                                     (floor (min 12 (/ (* columns .7) (- (nth 2 focus) (nth 0 focus)))
+                                                 (/ (* rows .45) (- (nth 3 focus) (nth 1 focus)))))
+                                   policy))))))
+       (when (> scale 1)
+         (let* ((display (plist-get context :metrics))
+                (metrics (list :char-width (or (plist-get display :char-width) (frame-char-width))
+                               :line-height (or (plist-get display :line-height) (frame-char-height))
+                               :ascent (or (plist-get display :ascent) 82)
+                               :family (face-attribute 'default :family nil t)
+                               :font-size (* .1 (face-attribute 'default :height nil t))))
+                (key (list scale metrics))
+                (cache (or (plist-get state :glyph-cache)
+                           (setf (plist-get state :glyph-cache) (make-hash-table :test #'equal)))))
+           (unless (equal key (plist-get state :glyph-key))
+             (clrhash cache)
+             (setf (plist-get state :glyph-key) key))
+           (etaf-screensaver--glyph-rows
+            (car (etaf-screensaver--reel-entry state (plist-get state :index)))
+            focus columns rows scale metrics cache
+            (etaf-screensaver--reel-text-native-rows state context focus))))))
+   (etaf-screensaver--reel-text-native-rows state context)))
+
+(defun etaf-screensaver--reel-text-native-rows (state context &optional exclude)
+  "Fit STATE's text into CONTEXT, optionally blanking EXCLUDE's cell bounds.
+Center, crop or pad at native cell size without changing cached source rows."
   (let* ((columns (plist-get context :columns))
          (rows (plist-get context :rows))
          (source-width (plist-get state :width))
@@ -418,12 +458,20 @@ both edges and a larger one pads with spaces."
      (make-list top "")
      (cl-loop for row below visible
               collect
-              (let ((line (aref frame-rows (+ first row))))
-                (if (<= source-width columns)
-                    (concat (make-string left ?\s) line (make-string right ?\s))
-                  (etaf-screensaver--reel-slice
-                   (aref (etaf-screensaver--reel-cells entry) (+ first row))
-                   crop columns))))
+              (let* ((source-row (+ first row))
+                     (line (aref frame-rows source-row))
+                     (blank (and exclude (<= (nth 1 exclude) source-row)
+                                 (< source-row (nth 3 exclude)))))
+                (when blank
+                  (setq line (concat (etaf-screensaver--presentation-crop line (nth 0 exclude))
+                                     (make-string (- (nth 2 exclude) (nth 0 exclude)) ?\s)
+                                     (etaf-screensaver--presentation-crop line (- source-width (nth 2 exclude)) (nth 2 exclude)))))
+                (cond ((<= source-width columns)
+                       (concat (make-string left ?\s) line (make-string right ?\s)))
+                      (blank (etaf-screensaver--presentation-crop line columns crop))
+                      (t (etaf-screensaver--reel-slice
+                          (aref (etaf-screensaver--reel-cells entry) source-row)
+                          crop columns)))))
      (make-list (- rows top visible) ""))))
 
 (defun etaf-screensaver--reel-render (state context)
@@ -501,7 +549,8 @@ A scene duration shorter than the recording loops it from the start."
             (etaf-screensaver--fail "Reel %s did not produce any frames" id))
           (list :kind 'text :frames frames :durations durations :ansi (plist-get data :ansi)
                 :width width :height height :index 0 :clock 0.0
-                :cache (make-vector count nil)))))))
+                :text-scale etaf-screensaver-reel-text-scale :text-focus nil
+                :glyph-key nil :glyph-cache nil :cache (make-vector count nil)))))))
 
 (defun etaf-screensaver-register-reel (spec)
   "Register the recorded animation described by SPEC and return the scene.
@@ -513,8 +562,9 @@ again replaces the previous scene in place.
 
 Registration holds only metadata.  Playback reads the recording at scene
 creation, or incrementally for the next queued built-in image bundle.
-Playback follows the recording's own per-frame timing and centers its fixed
-canvas; a smaller canvas crops both edges."
+Playback follows the recording's own per-frame timing.  Text subject sizing
+uses `etaf-screensaver-reel-text-scale'; surrounding text keeps native center
+fitting.  Image frames retain native size or downscale proportionally."
   (let* ((reel (if (eq (car-safe spec) 'etaf-reel) (cdr spec) spec)))
     (etaf-screensaver--reel-validate reel)
     (let* ((id (plist-get reel :id))
