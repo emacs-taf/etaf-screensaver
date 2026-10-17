@@ -66,13 +66,14 @@ CACHE keeps at most 64 shapes for the current font/scale geometry."
               (line-height (plist-get metrics :line-height)))
           (setq slices (vconcat (cl-loop for row below scale
                                          collect (list (list 'slice 0 (* row line-height) width line-height) image)))))
-        (when (>= (hash-table-count cache) 64) (clrhash cache))
-        (puthash key slices cache)))
+        ;; At the bound, keep live entries and compute a transient shape for
+        ;; this frame; clearing would rebuild every shape on every frame.
+        (when (< (hash-table-count cache) 64) (puthash key slices cache))))
     slices))
 
 (defun etaf-screensaver--glyph-runs (char face scale metrics shapes paints)
   "Return immutable styled slice strings for CHAR and FACE.
-SHAPES caches geometry; PAINTS keeps at most 256 styled glyphs, separately
+SHAPES caches geometry; PAINTS keeps at most 512 styled glyphs, separately
 from the shape's native image so color changes never rebuild its SVG."
   (let* ((key (cons char face)) (runs (gethash key paints)))
     (unless runs
@@ -86,8 +87,7 @@ from the shape's native image so color changes never rebuild its SVG."
             (when face (put-text-property 0 (length text) 'face face text))
             (when slices (put-text-property 0 (length text) 'display (aref slices slice) text))
             (aset runs slice text)))
-        (when (>= (hash-table-count paints) 256) (clrhash paints))
-        (puthash key runs paints)))
+        (when (< (hash-table-count paints) 512) (puthash key runs paints))))
     runs))
 
 (defun etaf-screensaver--glyph-rows (source focus columns rows scale metrics cache paints base)
