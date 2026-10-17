@@ -82,14 +82,16 @@ async function main() {
       });child=null;
       if(code!==0){failures.push(work.id);continue;}
       const manifest=JSON.parse(await readFile(join(out,work.id,work.id+'.frames.json'),'utf8'));
-      const spec=`;;; -*- lisp-data -*-\n(:id frames-${work.id} :title ${string(work.title)} :summary ${string(manifest.source)} :tags (gallery ${work.pack}) :provider frames :recording ${string(work.id+'/'+work.id+'.frames.json')} :kind image :frame-rate ${manifest.frame_rate} :frame-count ${manifest.frames.length} :source ${string(manifest.source)} :license ${string(manifest.license)})\n`;
+      const background=work.options?.backgroundColor ?? catalog.packs.find(p=>p.id===work.pack).background;
+      const paper=typeof background==='number' ? '#'+background.toString(16).padStart(6,'0') : background;
+      const spec=`;;; -*- lisp-data -*-\n(:id frames-${work.id} :background ${string(paper)} :title ${string(work.title)} :summary ${string(manifest.source)} :tags (gallery ${work.pack}) :provider frames :recording ${string(work.id+'/'+work.id+'.frames.json')} :kind image :frame-rate ${manifest.frame_rate} :frame-count ${manifest.frames.length} :source ${string(manifest.source)} :license ${string(manifest.license)})\n`;
       await writeFile(join(out,'frames-'+work.id+'.esr'),spec,{flag:'wx'});
     }
     if(interrupted)throw new Error('Gallery interrupted');
     if(failures.length)throw new Error(`Failed works: ${failures.join(', ')}; completed bundles remain in ${out}; gallery.el was not written`);
     const packs=catalog.packs.map(p=>{
       const scenes=works.filter(w=>w.pack===p.id).map(w=>'frames-'+w.id);
-      return scenes.length ? `(gallery-${p.id} :title ${string(p.title)} :theme ${p.theme} :presentation ${p.presentation} :background ${string(p.background)} :order sequential :scenes (${scenes.join(' ')}))` : null;
+      return scenes.length ? `(gallery-${p.id} :title ${string(p.title)} :theme ${p.theme} :presentation ${p.presentation} :order sequential :scenes (${scenes.join(' ')}))` : null;
     }).filter(Boolean);
     const config=`;;; -*- lexical-binding: t; -*-\n;;; Generated artwork collection; playback choices remain user-owned.\n(require 'etaf-screensaver)\n(add-to-list 'etaf-screensaver-scene-directories (file-name-directory (or load-file-name buffer-file-name)))\n(dolist (pack '(${packs.join('\n               ')}))\n  (setf (alist-get (car pack) etaf-screensaver-packs) (cdr pack)))\n(etaf-screensaver-load-scenes)\n`;
     await writeFile(join(out,'gallery.el'),config,{flag:'wx'});

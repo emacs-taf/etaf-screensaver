@@ -307,6 +307,36 @@
       (setq position (next-single-property-change position 'display text (length text))))
     (nreverse displays)))
 
+(ert-deftest etaf-screensaver-reel-tests-images-preserve-native-size ()
+  "Image works fit without enlargement and retain their full native extent."
+  (etaf-screensaver-reel-tests--clean
+    (etaf-screensaver-register-reel
+     (list :id 'reel-test-native-size :provider 'frames
+           :recording (etaf-screensaver-reel-tests--fixture "frames/sample.frames.json")))
+    (dolist (style '(full card band mosaic))
+      (let* ((buffer (etaf-screensaver-start
+                      (list :scene 'reel-test-native-size :presentation style)))
+             (text (with-current-buffer buffer (buffer-substring (point-min) (point-max))))
+             (displays (etaf-screensaver-reel-tests--displays text))
+             (images (cl-remove-if-not (lambda (display) (eq (car-safe (cadr display)) 'image)) displays))
+             (image (cadar images))
+             (scale (image-property image :scale))
+             (height (image-property image :max-height)))
+        (should images)
+        (should (<= scale 1.0))
+        (should (= height (* 20 scale)))
+        (should (= (image-property image :max-width) (* 40 scale)))
+        (when (eq style 'full)
+          (should (= scale 1.0))
+          (should (= height 20)))
+        (let ((covered 0))
+          (dolist (display images)
+            (let ((slice (car display)))
+              (should (= (nth 2 slice) covered))
+              (cl-incf covered (nth 4 slice))))
+          (should (= covered height))))
+      (etaf-screensaver-stop))))
+
 (ert-deftest etaf-screensaver-reel-tests-image-frames-advance ()
   "Images advance in every layout without changing earlier publication values."
   (etaf-screensaver-reel-tests--clean

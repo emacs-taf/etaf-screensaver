@@ -324,14 +324,11 @@ size is read from the first frame that needs it and cached."
   (cl-destructuring-bind (source-width source-height columns rows char-width line-height ascent) key
     (let* ((canvas-width (* columns char-width))
            (canvas-height (* rows line-height))
-           (fit (min (/ (float canvas-width) source-width)
+           ;; Preserve native pixels whenever the work fits.  Upscaling or
+           ;; rounding a fitting image to whole lines blurs the source.
+           (fit (min 1.0 (/ (float canvas-width) source-width)
                      (/ (float canvas-height) source-height)))
-           ;; Align the displayed frame to whole character rows.  A partial
-           ;; last slice bleeds into the next line, so derive the scale from
-           ;; the aligned height and let the width follow it.
-           (height (max 1 (if (< (* source-height fit) line-height)
-                              (floor (* source-height fit))
-                            (* line-height (floor (* source-height fit) line-height)))))
+           (height (max 1 (floor (* source-height fit))))
            (scale (/ (float height) source-height))
            (width (max char-width (round (* source-width scale))))
            (offset-x (max 0 (/ (- canvas-width width) 2)))
@@ -346,7 +343,13 @@ size is read from the first frame that needs it and cached."
         (let ((text (make-string columns ?\s))
               (y (- (* row line-height) offset-y)))
           (when (and (>= y 0) (< y height))
-            (push (cons text (list 'slice 0 y width (min line-height (- height y)))) runs)
+            (let* ((slice-height (min line-height (- height y)))
+                   ;; A partial final slice must keep the full slice's top
+                   ;; alignment.  Cache this geometry, not per-frame math.
+                   (raise (/ (- (floor (* line-height ascent) 100)
+                                (floor (* slice-height ascent) 100))
+                             (float line-height))))
+              (push (list text (list 'slice 0 y width slice-height) raise) runs))
             ;; Reserve the exact cell footprint without stretching the image:
             ;; the last cell supplies its fractional-column rounding slack.
             (when spacer
@@ -386,9 +389,13 @@ already shared with a published row or frozen outgoing page."
                 ;; decoding pixels; the public buffer remains testable.
                 (append (list 'image :type type :file file) properties)))))
       (dolist (run (etaf-screensaver--reel-image-layout-runs layout))
-        (put-text-property (etaf-screensaver--reel-image-layout-start layout)
-                           (etaf-screensaver--reel-image-layout-end layout)
-                           'display (list (cdr run) image) (car run))))
+        (let* ((slice (nth 1 run))
+               (raise (nth 2 run))
+               (display (if (zerop raise) (list slice image)
+                          (list slice image (list 'raise raise)))))
+          (put-text-property (etaf-screensaver--reel-image-layout-start layout)
+                             (etaf-screensaver--reel-image-layout-end layout)
+                             'display display (car run)))))
     (etaf-screensaver--reel-image-layout-rows layout)))
 
 (defun etaf-screensaver--reel-text-rows (state context)

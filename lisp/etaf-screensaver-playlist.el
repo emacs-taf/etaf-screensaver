@@ -36,8 +36,9 @@ scenes, loop a single work, or mix packs deliberately."
   "Presentation style, independent of the selected works or packs.
 Nil uses pack suggestions, or full for ungrouped works.  An explicit style
 replaces pack suggestions; an item's or group's :presentation overrides it.
-`full' fills the canvas, `card' frames one work, `band' adds a cinema strip
-and clock, and `mosaic' plays consecutive works in independent tiles.
+`full' fills the canvas; `card' frames the whole window with a lower-left
+title and summary.  `band' adds a cinema strip and clock, and `mosaic' plays
+consecutive works in independent tiles.
 A mosaic page has at most four works and never pads by duplicating a work."
   :type '(choice (const :tag "Pack suggestions" nil)
                  (const :tag "Full window" full)

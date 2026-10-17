@@ -41,6 +41,11 @@
 
 ### Changed
 
+- Gallery cards fill the editing area with a thin frame and ordinary lower-left
+  title/description. Images retain their native size when they fit and only
+  scale down proportionally, avoiding blurred enlargement. Generated gallery
+  scenes retain their own background in both standalone and pack playback.
+
 - The application is now a canvas-only screensaver. Configure it in Lisp or
   Customize; any key, mouse movement, completed click or wheel input wakes it.
   Dismissal restores the editor and releases all presentation resources.

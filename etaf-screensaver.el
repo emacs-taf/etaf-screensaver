@@ -145,8 +145,9 @@
 ;; unfinished validation completes at selection.  A next-page failure is
 ;; reported only when that page is selected, not while the current page plays.
 ;; Custom providers keep their synchronous :read contract.  Playback follows
-;; the recording's own timing and centers its fixed canvas, cropping when
-;; the window is smaller.  When the
+;; the recording's own timing.  Text recordings center their fixed cell canvas
+;; and crop smaller windows; images retain native pixel dimensions when they
+;; fit and otherwise scale down proportionally, never enlarging.  When the
 ;; spec carries :frame-count and :frame-rate the reel registers that full
 ;; length as its natural :duration, so a program plays the work once instead
 ;; of cutting it mid-loop.  Invalid
@@ -199,7 +200,9 @@
 ;; Variable: etaf-screensaver-presentation
 ;; Nil uses each pack's suggested style (full for standalone works).  Full,
 ;; card, band or mosaic overrides pack suggestions globally; explicit group
-;; or item :presentation settings take priority.  Mosaic presents independent
+;; or item :presentation settings take priority.  Card fills the window with a
+;; thin frame on the work's background and ordinary lower-left title/summary.
+;; Mosaic presents independent
 ;; works concurrently, not crops of one work; narrow windows stack the tiles.
 ;;
 ;; Variable: etaf-screensaver-packs

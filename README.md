@@ -44,8 +44,10 @@ Keep the same works and choose how they appear:
       etaf-screensaver-presentation 'card)
 ```
 
-`full` fills the canvas, `card` frames a work on a mat, `band` adds a cinema
-strip and clock, and `mosaic` plays up to four independent works concurrently.
+`full` fills the canvas, `card` adds a window-filling thin frame and lower-left
+title/description, `band` adds a cinema strip and clock, and `mosaic` plays up
+to four independent works concurrently. Images keep their native dimensions
+unless the window requires proportional downscaling; they never stretch or enlarge.
 Nil uses each pack's suggested presentation. Item/group overrides allow a
 mixed program. Different pages reveal progressively without a whole-canvas color cut;
 `etaf-screensaver-transition-duration` controls the duration independently.

@@ -136,10 +136,13 @@ test('collection delegates baking and emits independently loadable scene/pack da
   assert.equal((await invoke(['help'],null,cli)).code,0);
   const listing=await invoke(['--catalog',catalog,'--list'],null,cli);assert.match(listing.stdout,/one\ttest\tOne/);
   const result=await invoke(argv,null,cli);assert.equal(result.code,0,result.stderr);
-  assert.match(await readFile(join(out,'frames-one.esr'),'utf8'),/:recording "one\/one.frames.json"/);
+  const spec=await readFile(join(out,'frames-one.esr'),'utf8');
+  assert.match(spec,/:recording "one\/one.frames.json"/);
+  assert.match(spec,/:background "#ffffff"/);
   const config=await readFile(join(out,'gallery.el'),'utf8');
   assert.match(config,/lexical-binding: t/);assert.match(config,/gallery-test/);
   assert.doesNotMatch(config,/setq etaf-screensaver-program/);
+  assert.doesNotMatch(config,/:background/);
   assert.equal((await invoke(argv,null,cli)).code,1);
 }));
 test('existing output is preserved without opening a tab',async()=>fixture('ok',async({root,remote,args})=>{

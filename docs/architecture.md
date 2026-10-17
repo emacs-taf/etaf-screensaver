@@ -22,7 +22,9 @@ The presentation layout is the single source of content rectangles for both
 callback sizing and composition; a wall is not a sliced single-scene frame.
 Only the parent owns a mounted Runtime. Color-only changes are meaningful:
 publication compares text properties as well as characters. Full-canvas works
-inherit the Host background directly. Framed works use a read-only mat, border
+inherit the Host background directly. Gallery cards extend the work's paper
+across the viewport, with a thin perimeter and two ordinary lower-left caption
+rows for its title and summary. Framed works use a read-only paper/mat, border
 and caption template, rebuilt only for a new page, viewport or clock minute;
 its rows are split into static fragments and work-row slots. Each animation
 fills those slots with borrowed logical rows and background metadata, without
@@ -114,8 +116,11 @@ broken spec without disturbing the others.
 
 Text recordings render as canvas rows; image recordings take a second path.
 The `frames` provider returns image file names and a pixel size; the reel
-layer scales each frame to fit the canvas, centers it on whole character rows and crops it per row with a `display`
-slice, the same retained Host boundary ETAF video uses. Each playing reel keeps
+layer retains each frame's native pixel dimensions or scales it down uniformly
+when the canvas is smaller. It centers the image on character rows and crops it
+per row with a `display` slice, the same retained Host boundary ETAF video uses.
+The final partial slice is raised to the same top alignment as full slices,
+rather than rescaling the whole image to a multiple of the line height. Each playing reel keeps
 only its current geometry's logical row template, including blank rows and both
 margins. Native image size, viewport and character/line/ascent metrics determine
 that geometry. Frames replace each row's display value with a fresh image

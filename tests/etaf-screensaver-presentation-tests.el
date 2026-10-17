@@ -250,6 +250,40 @@
         (should (string-match-p "FIVE 中" text))
         (should-not (string-match-p "ONE 中" text))))))
 
+(ert-deftest etaf-screensaver-presentation-tests-card-fills-canvas ()
+  "The work fills its frame and ordinary captions occupy the lower left."
+  (etaf-screensaver-presentation-tests--clean
+    (set-window-configuration (current-window-configuration))
+    (etaf-screensaver-define-scene presentation-gallery-caption
+      :title "纸翼迁徙" :summary "Artist · Source" :background "#f4f1e9"
+      :create (lambda (_context) nil) :step (lambda (_state _context) nil)
+      :render (lambda (_state context)
+                (list (format "SIZE %dx%d" (plist-get context :columns)
+                              (plist-get context :rows)))))
+    (dolist (paper '("#f4f1e9" "#102030"))
+      (let* ((buffer (etaf-screensaver-start
+                      (list :scene 'presentation-gallery-caption
+                            :background paper :presentation 'card)))
+             (status (etaf-screensaver-status))
+             (columns (plist-get status :columns))
+             (rows (plist-get status :rows))
+             (text (etaf-screensaver-presentation-tests--text buffer))
+             (lines (split-string (string-remove-suffix "\n" text) "\n")))
+        (should (equal (car lines) (concat "┌" (make-string (- columns 2) ?─) "┐")))
+        (should (equal (car (last lines)) (concat "└" (make-string (- columns 2) ?─) "┘")))
+        (should (string-match-p (format "SIZE %dx%d" (- columns 2) (- rows 4)) text))
+        (should (string-match-p "纸翼迁徙" (nth (- rows 3) lines)))
+        (should (string-match-p "Artist · Source" (nth (- rows 2) lines)))
+        (with-current-buffer buffer
+          (save-excursion
+            (goto-char (point-min)) (search-forward "纸翼迁徙")
+            (let* ((face (get-text-property (1- (point)) 'face))
+                   (faces (if (keywordp (car-safe face)) (list face) face)))
+              (should (cl-some (lambda (entry) (equal (plist-get entry :background) paper)) faces))
+              (should-not (cl-some (lambda (entry) (plist-get entry :height)) faces))
+              (should-not (cl-some (lambda (entry) (plist-get entry :weight)) faces))))))
+      (etaf-screensaver-stop))))
+
 (ert-deftest etaf-screensaver-presentation-tests-styles-preserve-unicode ()
   "Every presentation publishes a rectangular canvas without splitting wide glyphs."
   (etaf-screensaver-presentation-tests--clean

@@ -38,7 +38,8 @@
     (list :mat mat :mat-text (etaf-screensaver--presentation-mix mat "#FFFFFF" .65)
           :paper base
           :border (etaf-screensaver--presentation-mix base contrast .28)
-          :text (etaf-screensaver--presentation-mix base contrast .72))))
+          :text (etaf-screensaver--presentation-mix base contrast .72)
+          :muted (etaf-screensaver--presentation-mix base contrast .52))))
 
 (defun etaf-screensaver--presentation-crop (text width &optional start)
   "Fit TEXT to WIDTH display columns starting at START, preserving properties.
@@ -90,11 +91,10 @@ callbacks and place their output.  A narrow wall stacks works vertically."
     (pcase style
       ('full (list :width width :height height :slots (list (list 0 0 width height))))
       ('card
-       (let* ((w (max 8 (round (* width .7))))
-              (h (max 6 (round (* height .74))))
-              (x (/ (- width w) 2)) (y (/ (- height h) 2)))
-         (list :width width :height height
-               :slots (list (list (1+ x) (1+ y) (- w 2) (- h 3))))))
+       ;; One continuous work-colored canvas, with two ordinary caption rows
+       ;; at the lower left.  Framing fills the window, not a centered card.
+       (list :width width :height height
+             :slots (list (list 1 1 (- width 2) (- height 4)))))
       ('band
        (let* ((h (max 3 (min (- height 5) (round (* height .5)))))
               (y (max 1 (/ (- height (+ h 3)) 2))))
@@ -140,18 +140,20 @@ Plans are shared read-only until the page, geometry or minute changes."
          (height (plist-get layout :height))
          (backgrounds (plist-get context :backgrounds))
          (palette (etaf-screensaver--presentation-palette (car backgrounds)))
-         (mat (plist-get palette :mat))
+         (mat (plist-get palette (if (eq style 'card) :paper :mat)))
          (blank (propertize (make-string width ?\s) 'face (list :background mat)))
          (canvas (make-vector height blank)))
     (cl-loop for slot in (plist-get layout :slots)
              for title in (plist-get context :titles)
+             for summary in (plist-get context :summaries)
              for background in backgrounds
              do
              (pcase-let ((`(,x ,y ,w ,h) slot))
                (let* ((colors (etaf-screensaver--presentation-palette background))
                       (paper (plist-get colors :paper))
                       (border (list :foreground (plist-get colors :border) :background paper))
-                      (caption (if (and (not (eq style 'mosaic)) (plist-get context :pack-title))
+                      (caption-rows (if (eq style 'card) 2 1))
+                      (caption (if (and (eq style 'band) (plist-get context :pack-title))
                                    (format "%s · %s" (plist-get context :pack-title) title)
                                  title)))
                  (pcase style
@@ -159,14 +161,21 @@ Plans are shared read-only until the page, geometry or minute changes."
                     (etaf-screensaver--presentation-put
                      canvas (1- x) (1- y)
                      (propertize (concat "┌" (make-string w ?─) "┐") 'face border))
-                    (dotimes (row (1+ h))
+                    (dotimes (row (+ h caption-rows))
                       (etaf-screensaver--presentation-put canvas (1- x) (+ y row) (propertize "│" 'face border))
                       (etaf-screensaver--presentation-put canvas (+ x w) (+ y row) (propertize "│" 'face border)))
                     (etaf-screensaver--presentation-put
                      canvas x (+ y h)
-                     (etaf-screensaver--presentation-label caption w (plist-get colors :text) paper))
+                     (etaf-screensaver--presentation-label
+                      (if (eq style 'card) (concat " " caption) caption)
+                      w (plist-get colors :text) paper))
+                    (when (eq style 'card)
+                      (etaf-screensaver--presentation-put
+                       canvas x (+ y h 1)
+                       (etaf-screensaver--presentation-label
+                        (concat " " summary) w (plist-get colors :muted) paper)))
                     (etaf-screensaver--presentation-put
-                     canvas (1- x) (+ y h 1)
+                     canvas (1- x) (+ y h caption-rows)
                      (propertize (concat "└" (make-string w ?─) "┘") 'face border)))
                    ('band
                     (let* ((clock (or (plist-get context :clock) (format-time-string "%H:%M")))

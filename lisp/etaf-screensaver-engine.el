@@ -160,6 +160,7 @@ Scene rows may be borrowed; publication owns any added background properties."
                                             :rows (etaf-screensaver--session-window-rows session)
                                             :backgrounds (mapcar (lambda (work) (plist-get (etaf-screensaver--session-item work) :background)) works)
                                             :titles (mapcar (lambda (work) (etaf-screensaver--scene-title (etaf-screensaver--session-scene work))) works)
+                                            :summaries (mapcar (lambda (work) (etaf-screensaver--scene-summary (etaf-screensaver--session-scene work))) works)
                                             :pack-title (plist-get item :pack-title) :clock nil))))
                    (clock (and (eq style 'band) (format-time-string "%H:%M"))))
               (when (or (null (etaf-screensaver--session-template session))
@@ -338,7 +339,7 @@ Scene rows may be borrowed; publication owns any added background properties."
   "Return SESSION's outer canvas color, including its framing mat."
   (let* ((item (etaf-screensaver--session-item session))
          (background (plist-get item :background)))
-    (if (eq (plist-get item :presentation) 'full) background
+    (if (memq (plist-get item :presentation) '(full card)) background
       (plist-get (etaf-screensaver--presentation-palette background) :mat))))
 
 (provide 'etaf-screensaver-engine)

@@ -183,7 +183,7 @@ Keep the program and choose its presentation separately:
 | Style | Presentation |
 | --- | --- |
 | `full` | The work occupies the whole canvas, with no caption. |
-| `card` | A centered bordered work and caption on a dark mat; light works keep their paper background. |
+| `card` | A window-filling thin frame on the work's background, with its title and summary in ordinary text at the lower left. |
 | `band` | A wide cinema strip, a clock row and a caption. The clock never overwrites the work. |
 | `mosaic` | Up to four independent works on one page, each with its own state, seed, background and caption. Narrow windows stack them vertically. |
 
@@ -219,7 +219,8 @@ A drawable canvas of **64 columns by 24 rows** is the minimum recommended
 viewport for the four presentations. Short windows retain their borders and
 captions with less artwork. Below the minimum, fixed framing geometry is
 clipped deliberately; glyphs are not squeezed. Text recordings keep their native
-cell size and center-crop; image recordings fit within their allocated tile.
+cell size and center-crop; image recordings retain native pixel dimensions when
+possible and only scale down, preserving aspect ratio, to fit their allocated tile.
 Resizing preserves reel position and passes the new content rectangle to each
 work's resize callback, without changing page order.
 
@@ -606,9 +607,11 @@ so the `.esr` spec and its frames stay together. Frames are still images and
 a bundle is much larger than a text recording; keep the canvas and frame
 count modest (for example 960×540 at 12–15 fps for 10 seconds), choose
 `--format jpeg` or `webp`, and keep baked bundles out of version control.
-Each frame is scaled to fit the canvas and centered; resizing the window
-rescales it, and the engine releases the previous frame from Emacs's image
-cache as the next one is published.
+Each frame is centered without enlargement. Smaller canvases scale it down
+uniformly; a larger window restores its native dimensions, never stretching it.
+The final partial character row retains its pixels without leaving a seam.
+The engine releases the previous frame from Emacs's image cache as the next one
+is published.
 
 The baker never overwrites an existing output. It builds in a sibling staging
 directory, then renames on success. An error, interrupted socket, signal or
@@ -633,7 +636,10 @@ images: 24 works in four packs. Six light works use different Vanta renderers
 (clouds, fog, waves, birds, a network and a point field); the remaining packs
 combine kinetic geometry and selected MilkDrop works. Titles, source authors,
 pack membership, renderer settings and baking defaults live in that recipe.
-It does not turn background-color variants into separate works.
+It does not turn background-color variants into separate works. Each generated
+scene owns its paper color, taken from the renderer's explicit background or the
+pack's fallback; the generated pack does not override that scene color. This
+keeps standalone previews and pack playback on the same paper.
 
 Install the pinned offline renderers outside the checkout, start Chrome with
 a local CDP endpoint, then build directly into persistent user storage:
