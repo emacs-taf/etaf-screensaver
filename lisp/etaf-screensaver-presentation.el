@@ -92,6 +92,14 @@ metrics, so the four distances match on screen rather than in cells.")
         (line-height (max 1 (frame-char-height))))
     (max 1 (round (/ (* rows line-height) (float cell-width))))))
 
+(defun etaf-screensaver--card-echo-rows ()
+  "Return the echo row height below a presentation window, or zero.
+The minibuffer row is outside the presentation window but part of the visible
+frame; the canvas paints it with the scene background and the card counts it
+as mat so the bottom and top distances stay equal."
+  (let ((window (minibuffer-window)))
+    (if (window-live-p window) (window-total-height window) 0)))
+
 (defun etaf-screensaver--presentation-layout (style columns rows &optional count)
   "Return STYLE's layout with COLUMNS, ROWS and COUNT independent works.
 Slots are (X Y WIDTH HEIGHT) content rectangles.  The same slots size the
@@ -105,15 +113,17 @@ callbacks and place their output.  A narrow wall stacks works vertically."
        ;; A centered work-colored page, framed by an even mat and two ordinary
        ;; caption rows at the lower left.  The mat is measured in line heights
        ;; vertically and in the matching pixel width horizontally; compact
-       ;; windows shrink it before squeezing the work below four rows.
+       ;; windows shrink it before squeezing the work below four rows.  The
+       ;; painted echo row below the window counts as part of the bottom mat.
        (let* ((margin (max 1 (min etaf-screensaver--card-margin-rows
                                   (floor (- height 8) 2))))
+              (bottom (max 1 (- margin (etaf-screensaver--card-echo-rows))))
               (side (max 1 (min (etaf-screensaver--card-margin-columns margin)
                                 (floor (- width 22) 2)))))
          (list :width width :height height
                :slots (list (list (1+ side) (1+ margin)
                                   (- width (* 2 side) 2)
-                                  (- height (* 2 margin) 4))))))
+                                  (- height margin bottom 4))))))
       ('band
        (let* ((h (max 3 (min (- height 5) (round (* height .5)))))
               (y (max 1 (/ (- height (+ h 3)) 2))))

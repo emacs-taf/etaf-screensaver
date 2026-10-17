@@ -187,6 +187,11 @@ Keep the program and choose its presentation separately:
 | `band` | A wide cinema strip, a clock row and a caption. The clock never overwrites the work. |
 | `mosaic` | Up to four independent works on one page, each with its own state, seed, background and caption. Narrow windows stack them vertically. |
 
+For `card`, an ordinary frame gets three line heights of mat on every side.
+The echo row below the window is painted with the work's background and
+counted in the bottom mat, so the four visual distances stay equal. Compact
+windows shrink the mat before the work drops below four content rows.
+
 The default `etaf-screensaver-presentation` is nil: each pack supplies its
 suggestion, and standalone works use full. A non-nil global value overrides
 pack suggestions. An explicit `:presentation` on a group or item has priority;

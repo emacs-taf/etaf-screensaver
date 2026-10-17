@@ -63,7 +63,9 @@
   heights on every side instead of touching the viewport edge. The side mat is
   derived from the frame's cell metrics so the four distances match on screen;
   compact windows shrink it before the work drops below four content rows, and
-  the two ordinary lower-left caption rows stay inside the frame. Images retain
+  the two ordinary lower-left caption rows stay inside the frame. The echo row
+  below the window is painted with the mat and counted in the bottom inset, so
+  the four visual distances stay equal. Images retain
   their native size when they fit and only scale down proportionally, avoiding
   blurred enlargement. Generated gallery scenes retain their own background in
   both standalone and pack playback.

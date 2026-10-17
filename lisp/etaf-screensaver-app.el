@@ -35,8 +35,8 @@ presentation also starts a fresh idle interval when it dismisses the scene."
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
   session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
-  program configured-seed resumable queue random-state seed index deadline last-time focus transition-duration
-  read-ahead)
+  program configured-seed resumable queue random-state seed index deadline last-time focus
+  transition-duration read-ahead)
 
 (defvar etaf-screensaver--active nil)
 (defvar etaf-screensaver--idle-timer nil)
@@ -135,17 +135,52 @@ background preview must not mistake an unchanged nil focus for a loss."
   "Return drawable columns in WINDOW, reserving Emacs's end-of-line cell."
   (max 1 (1- (window-body-width window))))
 
+(defun etaf-screensaver--paint-echo (owner background)
+  "Paint OWNER's echo row with BACKGROUND across the minibuffer width.
+The echo row is below the presentation window but part of the visible mat;
+leave the frame background alone so the title bar keeps its own color."
+  (let* ((frame (etaf-screensaver--presentation-frame owner))
+         (window (and (frame-live-p frame) (minibuffer-window frame))))
+    (when (window-live-p window)
+      (let* ((width (max 1 (window-body-width window)))
+             (height (max 1 (window-total-height window)))
+             (line (propertize (make-string width ?\s)
+                              'face (list :background background))))
+        (with-current-buffer (window-buffer window)
+          (let ((inhibit-read-only t)
+                (inhibit-modification-hooks t)
+                (buffer-undo-list t))
+            (erase-buffer)
+            (dotimes (row height)
+              (insert line)
+              (when (< row (1- height)) (insert "\n")))
+            (goto-char (point-min))))))))
+
+(defun etaf-screensaver--clear-echo (owner)
+  "Empty OWNER's echo row without touching the frame background."
+  (let* ((frame (etaf-screensaver--presentation-frame owner))
+         (window (and (frame-live-p frame) (minibuffer-window frame))))
+    (when (window-live-p window)
+      (with-current-buffer (window-buffer window)
+        (let ((inhibit-read-only t)
+              (inhibit-modification-hooks t)
+              (buffer-undo-list t))
+          (erase-buffer)
+          (goto-char (point-min)))))))
+
 (defun etaf-screensaver--canvas-face (owner)
-  "Paint OWNER's unused edge cell with its scene background."
-  (with-current-buffer (etaf-screensaver--session-buffer
-                        (etaf-screensaver--presentation-session owner))
-    (when (etaf-screensaver--presentation-face-cookie owner)
-      (face-remap-remove-relative (etaf-screensaver--presentation-face-cookie owner)))
-    (setf (etaf-screensaver--presentation-face-cookie owner)
-          (face-remap-add-relative
-           'default :background
-           (etaf-screensaver--session-background
-            (etaf-screensaver--presentation-session owner))))))
+  "Paint OWNER's scene background across the canvas and the echo row.
+The echo row below the presentation window is part of the visible mat; the
+card layout counts it, so the bottom and top distances stay equal."
+  (let ((background (etaf-screensaver--session-background
+                     (etaf-screensaver--presentation-session owner))))
+    (with-current-buffer (etaf-screensaver--session-buffer
+                          (etaf-screensaver--presentation-session owner))
+      (when (etaf-screensaver--presentation-face-cookie owner)
+        (face-remap-remove-relative (etaf-screensaver--presentation-face-cookie owner)))
+      (setf (etaf-screensaver--presentation-face-cookie owner)
+            (face-remap-add-relative 'default :background background)))
+    (etaf-screensaver--paint-echo owner background)))
 
 (defun etaf-screensaver--read-ahead (owner now)
   "Give OWNER's next queued page one bounded metadata chunk at time NOW.
@@ -320,8 +355,8 @@ This is a visual screensaver, not an operating-system security lock."
             ;; Mounted metrics may differ from frame defaults used in preflight.
             (etaf-screensaver--session-render session)
             (etaf-screensaver--session-publish session)
-            (etaf-screensaver--canvas-face owner)
             (message nil)
+            (etaf-screensaver--canvas-face owner)
             (let ((map (make-sparse-keymap)))
               (define-key map [t] #'etaf-screensaver--wake)
               (define-key map [mouse-movement] #'etaf-screensaver--wake)
@@ -363,6 +398,7 @@ idle watcher and rearming hook remain, waiting a fresh idle interval."
                   :seed (etaf-screensaver--presentation-seed owner))))
     ;; Clear ownership first: unmount, buffer death and map teardown can reenter.
     (setq etaf-screensaver--active nil)
+    (etaf-screensaver--clear-echo owner)
     (when (timerp (etaf-screensaver--presentation-timer owner))
       (cancel-timer (etaf-screensaver--presentation-timer owner)))
     (setf (etaf-screensaver--presentation-timer owner) nil

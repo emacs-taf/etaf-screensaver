@@ -27,7 +27,9 @@ across the viewport, inset a thin frame by an even mat of about three line
 heights, and reserve two ordinary lower-left caption rows for its title and
 summary. The side mat is derived from the frame's cell metrics so the four
 pixel distances match; compact windows shrink the mat before the work drops
-below four content rows. Framed works use a read-only paper/mat, border
+below four content rows. The echo row below the presentation window is
+painted with the mat and counted in the bottom inset, so the visual margins
+stay equal. Framed works use a read-only paper/mat, border
 and caption template, rebuilt only for a new page, viewport or clock minute;
 its rows are split into static fragments and work-row slots. Each animation
 fills those slots with borrowed logical rows and background metadata, without

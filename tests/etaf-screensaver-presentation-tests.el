@@ -297,6 +297,9 @@
                            (substring line (1+ right)) metrics))
              (top-width (* top (plist-get metrics :line-height)))
              (cell (plist-get metrics :char-width))
+             (echo (if (window-live-p (minibuffer-window))
+                       (window-total-height (minibuffer-window))
+                     0))
              (frame-width (* (1+ (- right left)) cell))
              (content-width (- right left 1))
              (content-height (- bottom top 3)))
@@ -308,7 +311,8 @@
         (should (> right-width 0))
         (should (> top 0))
         (should (< bottom (1- rows)))
-        (should (equal top (- rows bottom 1)))
+        ;; The painted echo row below the window is part of the bottom mat.
+        (should (equal top (+ (- rows bottom 1) echo)))
         (should (<= (abs (- left-width top-width)) cell))
         (should (<= (abs (- right-width top-width)) cell))
         (should (<= (abs (- left-width right-width)) cell))
@@ -318,6 +322,9 @@
         (should (string-match-p (format "SIZE %dx%d" content-width content-height) text))
         (should (string-match-p "纸翼迁徙" (nth (- bottom 2) lines)))
         (should (string-match-p "Artist · Source" (nth (1- bottom) lines)))
+        (with-current-buffer (window-buffer (minibuffer-window))
+          (should (equal (plist-get (get-text-property (point-min) 'face) :background)
+                         paper)))
         (with-current-buffer buffer
           (save-excursion
             (goto-char (point-min)) (search-forward "纸翼迁徙")
