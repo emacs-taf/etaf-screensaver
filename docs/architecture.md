@@ -74,6 +74,13 @@ branches remain lazy. Scene data is never evaluated as Lisp, and the environment
 cannot escape through the expression whitelist. The engine
 owns no timer or input handler.
 
+Life accumulates neighbor contributions from live cells into one reusable
+count grid, rather than visiting every dead cell's neighborhood too. It then
+applies birth/survival rules against the unchanged current generation and
+swaps two population buffers. Wrapped offsets retain their multiplicity even
+on a narrow grid. An extinct result uses the same seeded population routine;
+resize recreates the generation and scratch grids at the new dimensions.
+
 ## Recorded animations
 
 Reels adapt external animation recordings without reimplementing their

@@ -98,7 +98,8 @@
   than rebuilding them on every animation tick. Dense fields reuse invariant
   calculations and reduce per-cell temporary allocations without reducing
   sampling density or changing randomness. Generative scenes reuse their
-  current-size scratch canvas without retaining old glyphs or colors.
+  current-size scratch canvas without retaining old glyphs or colors. Life
+  counts neighbors from live cells and reuses its generation buffers.
 - A manually started background preview survives global focus rechecks; it
   still dismisses when its own frame actually loses focus or receives input.
 - Scenes can draw Unicode symbols and mixed-width text on Emacs 31, including

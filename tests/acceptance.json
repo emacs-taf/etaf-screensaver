@@ -3,6 +3,7 @@
   "load_path": [".", "tests", "../etaf", "../ebox", "../ecss", "../../etaf", "../../ebox", "../../ecss"],
   "support": [],
   "cases": [
+    {"name": "etaf-screensaver-presentation-tests-life-rules-and-resize", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Seeded Life matches a public callback reference for wrapped/clipped edges, custom rules, extinction reseeding and shrink/expansion."},
     {"name": "etaf-screensaver-presentation-tests-sparse-frames-clear-cells", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Moving sparse DSL layers clear earlier wide glyphs and colors, preserve published snapshots, and keep row geometry through shrink and expansion."},
     {"name": "etaf-screensaver-reel-tests-ansi-runs-keep-independent-attributes", "file": "tests/etaf-screensaver-reel-tests.el", "purpose": "Sequential 16-color, true-color and indexed SGR runs preserve prior colors and attributes across later changes and resets, including wide characters."},
     {"name": "etaf-screensaver-presentation-tests-reused-mutable-rows", "file": "tests/etaf-screensaver-presentation-tests.el", "purpose": "Every layout publishes character and subsequent color-only changes when a scene reuses and mutates its own row string."},

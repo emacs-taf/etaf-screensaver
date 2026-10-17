@@ -123,6 +123,86 @@
         (let ((unchanged (equal-including-properties snapshot original)))
           (should unchanged))))))
 
+(ert-deftest etaf-screensaver-presentation-tests-life-rules-and-resize ()
+  "Life preserves seeded rules, edge policy and reseeding through resize."
+  (etaf-screensaver-presentation-tests--clean
+    ;; Normalize the batch frame before either seeded program sizes its grid.
+    (set-window-configuration (current-window-configuration))
+    (dolist (case '((t 0.25 (3) (2 3)) (nil 0.25 (3) (2 3))
+                    (t 0.35 (9) (9)) (nil 0.0 (0) (2))))
+      (let ((wrap (nth 0 case)) (density (nth 1 case))
+            (birth (nth 2 case)) (survive (nth 3 case)))
+        (cl-labels
+            ((populate (context)
+               (let* ((random (plist-get context :random))
+                      (cells (make-vector (* (plist-get context :columns)
+                                             (plist-get context :rows)) nil)))
+                 (dotimes (index (length cells))
+                   (aset cells index (< (funcall random) density)))
+                 cells))
+             (capture (scene)
+               (let ((buffer (etaf-screensaver-start scene)) frames)
+                 (dolist (tick '(0 1 2 3))
+                   (etaf-screensaver-presentation-tests--wait
+                    (lambda () (>= (plist-get (etaf-screensaver-status) :ticks) tick)))
+                   (let ((actual (plist-get (etaf-screensaver-status) :ticks)))
+                     (should (= actual tick)))
+                   (push (etaf-screensaver-presentation-tests--text buffer) frames))
+                 (dolist (margins '((5 5) (0 0)))
+                   (let ((tick (plist-get (etaf-screensaver-status) :ticks)))
+                     (apply #'set-window-margins nil margins)
+                     (let ((columns (1- (window-body-width))))
+                       (etaf-screensaver-presentation-tests--wait
+                        (lambda ()
+                          (let ((status (etaf-screensaver-status)))
+                            (and (= (plist-get status :columns) columns)
+                                 (> (plist-get status :ticks) tick))))))
+                     (push (etaf-screensaver-presentation-tests--text buffer) frames)))
+                 (etaf-screensaver-stop)
+                 (nreverse frames))))
+          (etaf-screensaver-define-scene presentation-life-reference
+            :frame-rate 5
+            :create (lambda (context) (list :cells (populate context)))
+            :resize (lambda (state context)
+                      (setf (plist-get state :cells) (populate context)) state)
+            :step
+            (lambda (state context)
+              (let* ((rows (plist-get context :rows))
+                     (columns (plist-get context :columns))
+                     (cells (plist-get state :cells))
+                     (next (make-vector (length cells) nil)) (alive 0))
+                (dotimes (index (length cells))
+                  (let ((row (/ index columns)) (column (% index columns)) (count 0))
+                    (dolist (offset '((-1 . -1) (-1 . 0) (-1 . 1) (0 . -1)
+                                      (0 . 1) (1 . -1) (1 . 0) (1 . 1)))
+                      (let ((r (+ row (car offset))) (c (+ column (cdr offset))))
+                        (when wrap (setq r (mod r rows) c (mod c columns)))
+                        (when (and (<= 0 r) (< r rows) (<= 0 c) (< c columns)
+                                   (aref cells (+ (* r columns) c)))
+                          (cl-incf count))))
+                    (when (memq count (if (aref cells index) survive birth))
+                      (aset next index t) (cl-incf alive))))
+                (setf (plist-get state :cells) (if (= alive 0) (populate context) next))))
+            :render
+            (lambda (state context)
+              (let ((cells (plist-get state :cells)) (columns (plist-get context :columns)))
+                (cl-loop for row below (plist-get context :rows)
+                         collect (apply #'string
+                                        (cl-loop for column below columns
+                                                 collect (if (aref cells (+ (* row columns) column))
+                                                             ?# ?\s)))))))
+          (etaf-screensaver-register-scene
+           (list :id 'presentation-life :frame-rate 5
+                 :layers (list (list :kind 'life :density density :wrap wrap :char "#"
+                                     :rule (list :birth birth :survive survive)))))
+          (let* ((expected (capture 'presentation-life-reference))
+                 (actual (capture 'presentation-life)))
+            (cl-loop for left in expected for right in actual for sample from 0
+                     do (ert-info ((format "wrap=%s density=%s sample=%s lengths=%s/%s first-difference=%s"
+                                           wrap density sample (length left) (length right)
+                                           (cl-mismatch left right)))
+                          (let ((same (equal left right))) (should same))))))))))
+
 (defmacro etaf-screensaver-presentation-tests--work (id label)
   "Register a public test work ID with its own moving LABEL."
   `(etaf-screensaver-define-scene ,id

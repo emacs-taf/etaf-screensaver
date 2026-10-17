@@ -19,21 +19,24 @@
 
 ;;; life -- Conway-style neighborhood automaton.
 
-(defun etaf-screensaver--life-neighbors (cells rows columns row column wrap)
-  "Return the live neighbor count around ROW,COLUMN in CELLS."
-  (let ((count 0))
-    (dotimes (dy 3)
-      (dotimes (dx 3)
-        (unless (and (= dy 1) (= dx 1))
-          (let ((r (+ row (1- dy)))
-                (c (+ column (1- dx))))
-            (when wrap
-              (setq r (mod r rows)
-                    c (mod c columns)))
-            (when (and (>= r 0) (< r rows) (>= c 0) (< c columns)
-                       (aref cells (+ (* r columns) c)))
-              (cl-incf count))))))
-    count))
+(defun etaf-screensaver--life-count-neighbors (cells counts rows columns wrap)
+  "Fill COUNTS with live neighbor totals for CELLS, preserving edge WRAP.
+Only live cells contribute; a sparse board need not visit every dead cell's
+neighborhood.  Count all eight offsets even when wrapped edges coincide."
+  (fillarray counts 0)
+  (dotimes (row rows)
+    (dotimes (column columns)
+      (when (aref cells (+ (* row columns) column))
+        (dotimes (dy 3)
+          (dotimes (dx 3)
+            (unless (and (= dy 1) (= dx 1))
+              (let ((r (+ row (1- dy)))
+                    (c (+ column (1- dx))))
+                (when wrap
+                  (setq r (mod r rows)
+                        c (mod c columns)))
+                (when (and (>= r 0) (< r rows) (>= c 0) (< c columns))
+                  (cl-incf (aref counts (+ (* r columns) c))))))))))))
 
 (defun etaf-screensaver--life-rule (layer)
   "Return LAYER's (BIRTH . SURVIVE) neighbor sets."
@@ -64,7 +67,9 @@
                 (etaf-screensaver--fail "life :rule must be a plist: %S"
                                         (plist-get layer :rule))))
   :create (lambda (layer context)
-            (list :cells (etaf-screensaver--life-populate layer context)))
+            (let ((cells (etaf-screensaver--life-populate layer context)))
+              (list :cells cells :next (make-vector (length cells) nil)
+                    :neighbors (make-vector (length cells) 0))))
   :step (lambda (layer state context)
           (let* ((etaf-screensaver--dsl-random (plist-get context :random))
                  (rows (plist-get context :rows))
@@ -74,23 +79,19 @@
                         (etaf-screensaver--layer-property layer :wrap t) env))
                  (rule (etaf-screensaver--life-rule layer))
                  (cells (plist-get state :cells))
-                 (next (make-vector (length cells) nil))
+                 (counts (plist-get state :neighbors))
+                 (next (plist-get state :next))
                  (alive 0))
-            (dotimes (row rows)
-              (dotimes (column columns)
-                (let* ((index (+ (* row columns) column))
-                       (live (aref cells index))
-                       (neighbors (etaf-screensaver--life-neighbors
-                                   cells rows columns row column wrap))
-                       (survives (if live
-                                     (memq neighbors (cdr rule))
-                                   (memq neighbors (car rule)))))
-                  (when survives
-                    (aset next index t)
-                    (cl-incf alive)))))
+            (etaf-screensaver--life-count-neighbors cells counts rows columns wrap)
+            (dotimes (index (length cells))
+              (let ((survives (memq (aref counts index)
+                                    (if (aref cells index) (cdr rule) (car rule)))))
+                (aset next index (and survives t))
+                (when survives (cl-incf alive))))
             (setf (plist-get state :cells)
                   (if (zerop alive) (etaf-screensaver--life-populate layer context)
-                    next))))
+                    next)
+                  (plist-get state :next) cells)))
   :draw (lambda (layer state context canvas)
           (let* ((rows (plist-get context :rows))
                  (columns (plist-get context :columns))
