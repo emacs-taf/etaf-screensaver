@@ -127,8 +127,9 @@ without changing cached recording rows. Only the subject's source rows are
 scanned; there is no expanded per-frame character-grid cache. A work keeps at
 most 64 glyph shapes and 512 styled glyphs for its current scale/font geometry.
 Their display slices and styled slice strings are read-only reusable values;
-publication cannot recolor an earlier frame. SVG `currentColor` inherits
-the original character's face; color changes do not rebuild or release a
+publication cannot recolor an earlier frame. The subject keeps one ink chosen
+for contrast with the work background, and weight/slant still come from the
+original character's face, so a colour fade does not rebuild or release a
 still-visible shape. Publication and teardown use the same image ownership
 as image reels. Terminals, missing SVG support,
 scale 1 and an empty final frame retain native text.

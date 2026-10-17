@@ -230,11 +230,12 @@ Graphical Emacs with SVG support enlarges a text recording's subject without
 stretching pixels or changing the border/caption font. The subject is the
 nonblank cell rectangle in its final frame. Its current animated characters
 are drawn larger at the center; surrounding beams, rain and other effects keep
-playing at their native cell size. The recording's timing and colors stay intact.
-For a single work, the automatic scale fits the available work rectangle and
-fills up to 95% of the work width and 70% of its height. Concurrent works keep their native
-overview instead of competing magnified subjects; an explicit integer scale
-still applies to every work. An empty final frame keeps native text.
+playing at their native cell size. The recording's timing stays intact, and the
+enlarged subject keeps one ink colour chosen to contrast with the work
+background. For a single work, the automatic scale fills up to 95% of the work
+width and 70% of its height. Concurrent works keep their native overview
+instead of competing magnified subjects; an explicit integer scale still
+applies to every work. An empty final frame keeps native text.
 
 ```elisp
 (setq etaf-screensaver-reel-text-scale 'auto) ; default, adapts on resize

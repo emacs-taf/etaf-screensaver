@@ -105,6 +105,41 @@ Only these characters grow; transient effect glyphs stay at native size."
                       (cl-incf x width)))))
     chars))
 
+(defun etaf-screensaver--glyph-color-luma (color)
+  "Return the luminance of a #RRGGBB COLOR, or 0 when it is not a color."
+  (save-match-data
+    (if (and (stringp color)
+             (string-match "\\`#\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)\\([0-9a-fA-F]\\{2\\}\\)\\'" color))
+        (+ (* .299 (string-to-number (match-string 1 color) 16))
+           (* .587 (string-to-number (match-string 2 color) 16))
+           (* .114 (string-to-number (match-string 3 color) 16)))
+      0)))
+
+(defun etaf-screensaver--glyph-subject-ink (frames background)
+  "Return the recording colour in FRAMES that contrasts most with BACKGROUND.
+One fixed ink avoids re-rasterizing glyphs at every step of a colour fade; the
+choice follows the page, so paper pages take dark ink and dark pages bright
+ink.  FRAMES is sampled sparsely, keeping the scan to a few milliseconds."
+  (save-match-data
+    (let ((bg-luma (etaf-screensaver--glyph-color-luma background))
+          (ink nil) (best -1) (index 0) (length (length frames)))
+      (while (and (< index length) (< index 2400))
+        (let ((frame (aref frames index)) (position 0))
+          (when (stringp frame)
+            (while (string-match "\e\\[38;2;\\([0-9]+\\);\\([0-9]+\\);\\([0-9]+\\)m"
+                                 frame position)
+              (let* ((color (format "#%02x%02x%02x"
+                                    (string-to-number (match-string 1 frame))
+                                    (string-to-number (match-string 2 frame))
+                                    (string-to-number (match-string 3 frame))))
+                     (distance (abs (- (etaf-screensaver--glyph-color-luma color)
+                                       bg-luma))))
+                (setq position (match-end 0))
+                (when (> distance best)
+                  (setq best distance ink color))))))
+        (setq index (+ index 7)))
+      ink)))
+
 (defun etaf-screensaver--glyph-quantize-color (color)
   "Return COLOR snapped to a small palette step, or nil.
 An animated fade otherwise re-rasterizes every SVG glyph on each step; eight
@@ -119,8 +154,9 @@ levels per channel keep the motion while bounding recolouring work."
   "Return immutable styled slice strings for CHAR and FACE.
 SHAPES caches geometry; PAINTS keeps at most 512 styled glyphs, separately
 from the shape's native image so color changes never rebuild its SVG."
-  (let* ((ink (etaf-screensaver--glyph-quantize-color
-               (etaf-screensaver--glyph-attribute face :foreground)))
+  (let* ((ink (or (plist-get metrics :ink)
+                  (etaf-screensaver--glyph-quantize-color
+                   (etaf-screensaver--glyph-attribute face :foreground))))
          (face (if ink (list :foreground ink) face))
          (key (cons char face))
          (runs (gethash key paints)))

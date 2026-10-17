@@ -111,6 +111,7 @@ borrowed work rows and static mat/border fragments remain unchanged."
           :elapsed (etaf-screensaver--session-elapsed session)
           :dt (etaf-screensaver--session-dt session)
           :metrics (etaf-screensaver--session-metrics session)
+          :background (plist-get (etaf-screensaver--session-item session) :background)
           :params (mapcar #'car (etaf-screensaver--session-params session))
           :param (lambda (key)
                    (let ((entry (assq (etaf-screensaver--parameter-key key)

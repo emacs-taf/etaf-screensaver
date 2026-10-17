@@ -427,10 +427,16 @@ already shared with a published row or frozen outgoing page."
                                    policy))))))
        (when (> scale 1)
          (let* ((display (plist-get context :metrics))
+                (ink (or (plist-get state :subject-ink)
+                         (setf (plist-get state :subject-ink)
+                               (etaf-screensaver--glyph-subject-ink
+                                (plist-get state :frames)
+                                (plist-get context :background)))))
                 (metrics (list :char-width (or (plist-get display :char-width) (frame-char-width))
                                :line-height (or (plist-get display :line-height) (frame-char-height))
                                :ascent (or (plist-get display :ascent) 82)
-                               :family (etaf-screensaver--glyph-font-stack)))
+                               :family (etaf-screensaver--glyph-font-stack)
+                               :ink ink))
                 (key (list scale metrics))
                 (cache (or (plist-get state :glyph-cache)
                            (setf (plist-get state :glyph-cache) (make-hash-table :test #'equal))))
@@ -572,7 +578,7 @@ A scene duration shorter than the recording loops it from the start."
                 :width width :height height :index 0 :clock 0.0
                 :text-scale etaf-screensaver-reel-text-scale :text-focus nil
                 :glyph-key nil :glyph-cache nil :glyph-paints nil
-                :glyph-subject nil :cache (make-vector count nil)))))))
+                :glyph-subject nil :subject-ink nil :cache (make-vector count nil)))))))
 
 (defun etaf-screensaver-register-reel (spec)
   "Register the recorded animation described by SPEC and return the scene.
