@@ -12,7 +12,9 @@ GALLERY ?= $(HOME)/.emacs.d/etaf-screensaver/scenes/gallery/gallery.el
 PRESENTATION ?= full
 
 # Providers live beside the application (standalone) or two levels up (workspace).
-PROVIDER_ROOT := $(if $(wildcard ../etaf/etaf.el),..,$(if $(wildcard ../../etaf/etaf.el),../..,))
+# Providers are siblings in the workspace and in a standalone clone;
+# override PROVIDER_ROOT to pin another checkout.
+PROVIDER_ROOT ?= ..
 
 LOAD_PATH = -L . -L lisp -L tests -L $(PROVIDER_ROOT)/etaf \
             -L $(PROVIDER_ROOT)/ebox -L $(PROVIDER_ROOT)/ecss -L $(PROVIDER_ROOT)/etaf/scripts
