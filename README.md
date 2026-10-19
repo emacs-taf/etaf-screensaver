@@ -15,7 +15,7 @@ Disabling the mode releases those too.
 
 Emacs 29.1 or later and the `etaf`, `ebox` and `ecss` provider roots on
 `load-path`. Providers may be beside this repository or two levels up in the
-`emacs-taf/etaf-apps` workspace layout. Add this repository root as well:
+`emacs-taf` workspace layout. Add this repository root as well:
 
 ```elisp
 (require 'etaf-screensaver)
@@ -120,8 +120,8 @@ From the enclosing workspace, measure autonomous frame cadence with:
 
 ```sh
 python3 scripts/performance.py run --mode batch \
-  --scenario-file etaf-apps/etaf-screensaver/benchmarks/performance-scenarios.el \
-  --load-path etaf-apps/etaf-screensaver --scenario 'etaf-screensaver.frame.*'
+  --scenario-file etaf-screensaver/benchmarks/performance-scenarios.el \
+  --load-path etaf-screensaver --scenario 'etaf-screensaver.frame.*'
 ```
 
 A sample includes waiting for the next frame, computation and publication.
