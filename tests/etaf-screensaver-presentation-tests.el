@@ -618,5 +618,23 @@
                    "STATIC TOP[^\n]*\n[^\n]*BAAA[^\n]*\n[^\n]*\n[^\n]*STATIC BOTTOM" text)))
         (etaf-screensaver-stop)))))
 
+;; Requires the application runtime: before it the canvas face and the buffer
+;; death were handled by a hand-written remap cookie and kill-buffer hook.
+(ert-deftest etaf-screensaver-presentation-tests-canvas-is-an-application ()
+  "The presentation is an ETAF application whose canvas paints the mat."
+  (etaf-screensaver-presentation-tests--clean
+    (let* ((buffer (etaf-screensaver-start
+                    '(:presentation card :scenes
+                      ((:scene presentation-one :duration 30)))))
+           (canvas (with-current-buffer buffer
+                     (plist-get (car (last (alist-get 'default
+                                                      face-remapping-alist)))
+                                :background))))
+      (should (etaf-app-state buffer))
+      (should (stringp canvas))
+      ;; Killing the buffer releases the presentation through the application.
+      (kill-buffer buffer)
+      (should-not (plist-get (etaf-screensaver-status) :active)))))
+
 (provide 'etaf-screensaver-presentation-tests)
 ;;; etaf-screensaver-presentation-tests.el ends here

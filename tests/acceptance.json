@@ -30,6 +30,11 @@
       "purpose": "Invalid recorded-text scale values fail before window takeover and leave the caller buffer selected."
     },
     {
+      "name": "etaf-screensaver-presentation-tests-canvas-is-an-application",
+      "file": "tests/etaf-screensaver-presentation-tests.el",
+      "purpose": "The presentation mounts as an ETAF application whose canvas paints the mat, and killing its buffer releases the presentation."
+    },
+    {
       "name": "etaf-screensaver-presentation-tests-card-mats-evenly",
       "file": "tests/etaf-screensaver-presentation-tests.el",
       "purpose": "The gallery card sits on an even mat of about three line heights on every side, keeps its title and summary at the lower left in ordinary text, and retains light and dark paper."

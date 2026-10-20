@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- Presentations run on the ETAF application runtime and require etaf 0.3.0 and
+  etaf-ui 0.2.0. The scene background follows the current page through the
+  application canvas, and killing the presentation buffer releases it.
+
 ### Added
 
 - Eased page reveals preserve outgoing colors while the next work moves,

@@ -11,7 +11,6 @@
 
 ;;; Code:
 (require 'cl-lib)
-(require 'face-remap)
 (require 'etaf)
 (require 'etaf-screensaver-playlist)
 (require 'etaf-screensaver-engine)
@@ -34,7 +33,8 @@ presentation also starts a fresh idle interval when it dismisses the scene."
   :type 'number :group 'etaf-screensaver)
 
 (cl-defstruct (etaf-screensaver--presentation (:constructor etaf-screensaver--presentation-new))
-  session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters face-cookie
+  session frame window configuration origin-buffer timer exit-map track-mouse frame-parameters
+  (canvas (etaf-ref nil))
   program configured-seed resumable queue random-state seed index deadline last-time focus
   transition-duration read-ahead)
 
@@ -123,14 +123,6 @@ background preview must not mistake an unchanged nil focus for a loss."
              (eq frame (etaf-screensaver--presentation-frame etaf-screensaver--active)))
     (etaf-screensaver-stop)))
 
-(defun etaf-screensaver--buffer-killed ()
-  "Release the presentation when its buffer is killed externally."
-  (when (and etaf-screensaver--active
-             (eq (current-buffer)
-                 (etaf-screensaver--session-buffer
-                  (etaf-screensaver--presentation-session etaf-screensaver--active))))
-    (etaf-screensaver-stop)))
-
 (defun etaf-screensaver--columns (window)
   "Return drawable columns in WINDOW, reserving Emacs's end-of-line cell."
   (max 1 (1- (window-body-width window))))
@@ -174,12 +166,9 @@ The echo row below the presentation window is part of the visible mat; the
 card layout counts it, so the bottom and top distances stay equal."
   (let ((background (etaf-screensaver--session-background
                      (etaf-screensaver--presentation-session owner))))
-    (with-current-buffer (etaf-screensaver--session-buffer
-                          (etaf-screensaver--presentation-session owner))
-      (when (etaf-screensaver--presentation-face-cookie owner)
-        (face-remap-remove-relative (etaf-screensaver--presentation-face-cookie owner)))
-      (setf (etaf-screensaver--presentation-face-cookie owner)
-            (face-remap-add-relative 'default :background background)))
+    ;; The application canvas follows this source, so the scene background
+    ;; repaints across every cell the View does not paint.
+    (setf (etaf-value (etaf-screensaver--presentation-canvas owner)) background)
     (etaf-screensaver--paint-echo owner background)))
 
 (defun etaf-screensaver--read-ahead (owner now)
@@ -337,20 +326,30 @@ This is a visual screensaver, not an operating-system security lock."
             (set-window-margins nil 0 0)
             (set-window-fringes nil 0 0)
             (with-current-buffer buffer
-              (setq-local mode-line-format nil header-line-format nil tab-line-format nil
-                          cursor-type nil display-line-numbers nil
-                          truncate-lines t show-trailing-whitespace nil
-                          indicate-empty-lines nil)
-              (add-hook 'kill-buffer-hook #'etaf-screensaver--buffer-killed nil t))
+              ;; The mode line must be gone before the body height is read:
+              ;; the layout counts every row the window can draw.
+              (setq-local mode-line-format nil header-line-format nil
+                          tab-line-format nil display-line-numbers nil
+                          show-trailing-whitespace nil
+                          indicate-empty-lines nil))
             (etaf-screensaver--session-resize session (etaf-screensaver--columns (selected-window))
                                              (max 1 (window-body-height)))
-            (etaf-mount
-             buffer (etaf-view
-                     (etaf-screensaver-view
-                      :session session
-                      :on-close (lambda ()
-                                  (when (eq owner etaf-screensaver--active)
-                                    (etaf-screensaver-stop))))))
+            (etaf-app-open
+             (buffer-name buffer)
+             (etaf-view
+              (etaf-screensaver-view
+               :session session
+               :on-close (lambda ()
+                           (when (eq owner etaf-screensaver--active)
+                             (etaf-screensaver-stop)))))
+             :state session
+             :background (etaf-screensaver--presentation-canvas owner)
+             :cursor nil
+             :mode-line nil
+             :display nil
+             :on-close (lambda ()
+                         (when (eq owner etaf-screensaver--active)
+                           (etaf-screensaver-stop))))
             (setf (etaf-screensaver--session-runtime session) (etaf-runtime-for-buffer buffer))
             ;; Mounted metrics may differ from frame defaults used in preflight.
             (etaf-screensaver--session-render session)
@@ -424,10 +423,7 @@ idle watcher and rearming hook remain, waiting a fresh idle interval."
             (when (etaf-screensaver--presentation-frame-parameters owner)
               (modify-frame-parameters frame (etaf-screensaver--presentation-frame-parameters owner)))
             (set-window-configuration (etaf-screensaver--presentation-configuration owner))))
-        (when (buffer-live-p buffer)
-          (with-current-buffer buffer
-            (remove-hook 'kill-buffer-hook #'etaf-screensaver--buffer-killed t))
-          (kill-buffer buffer))
+        (when (buffer-live-p buffer) (kill-buffer buffer))
         (when restore-current
           (set-buffer (if (buffer-live-p (etaf-screensaver--presentation-origin-buffer owner))
                           (etaf-screensaver--presentation-origin-buffer owner)
